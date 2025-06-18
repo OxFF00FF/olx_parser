@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import sys
 import time
 import uuid
 from datetime import datetime
@@ -79,7 +80,10 @@ class olxParser:
 
     @staticmethod
     def _get_html(html_text: str) -> BS:
-        return BS(html_text, 'html.parser')
+        try:
+            return BS(html_text, 'html.parser')
+        except Exception as e:
+            raise e
 
     @staticmethod
     def _find_json(html: BS):
@@ -120,7 +124,8 @@ class olxParser:
 
         else:
             logger.error(f"⚠️  Unexpected status: {status}")
-            print(response)
+            html = self._get_html(response)
+            logger.error(f"⚠️  {html.select_one('title').get_text()} · {url}")
             return {}
 
     @staticmethod
@@ -723,7 +728,7 @@ class olxParser:
         total_offers = len(offers_data)
         save_every_n = 10
 
-        pbar = tqdm_asyncio(total=total_offers, desc='🔄  Парсим номер телефонов', bar_format=self._bar, ncols=self._cols, leave=False, ascii=' ▱▰')
+        pbar = tqdm_asyncio(total=total_offers, desc='🔄  Парсим номер телефонов', bar_format=self._bar, ncols=200, leave=False, ascii=' ▱▰')
 
         tasks = [
             self.fetch_and_write_phone(n, item, ws, wb, wb_path, save_every_n, pbar)
@@ -735,15 +740,16 @@ class olxParser:
 
         pbar.close()
 
-        with yaspin(text="Чтение файла") as spinner:
+        with yaspin(text="Сохранение файла") as spinner:
             wb.save(wb_path)
-            spinner.ok('✅  Готово ')
+            spinner.ok('✅  Готово')
 
-    async def run(self, region_id=None):
+    async def run(self, region_id=None, city_id=None):
         """
         Запуск парсера. Если передан region_id, то обрабатывается только этот регион.
         """
-        logger.info('ℹ️  Начинается сбор объявлений для выбранного региона')
+        logger.info('ℹ️  Начинается сбор объявлений для выбранного региона и города')
+        time.sleep(1)
 
         total_collected = 0
         indexes_path = os.path.join(self.data_dir, 'last_indexes.json')
@@ -753,7 +759,6 @@ class olxParser:
         save_json(indexes, indexes_path)
 
         regions = await self.get_regions()
-
         if region_id is not None:
             regions = [r for r in regions if r.id == region_id]
             indexes["region"] = 0  # сбрасываем прогресс, чтобы начать с начала выбранного региона
@@ -762,9 +767,13 @@ class olxParser:
             if n_region < indexes["region"]:
                 continue  # Пропускаем уже обработанные регионы
 
-            print(f"\n{LIGHT_BLUE}[{n_region + 1} / {len(regions)}]{WHITE}    |  🆔  {region.id} · Регион:    {LIGHT_YELLOW}{region.name}{WHITE}")
+            print(f"\n{LIGHT_BLUE}[{n_region + 1} / {len(regions)}]{WHITE} |  🆔  {region.id} · Регион:  {LIGHT_YELLOW}{region.name}{WHITE}")
 
             cities = await self.get_cities(region)
+            if city_id is not None:
+                cities = [c for c in cities if c.id == city_id]
+                indexes["city"] = 0  # сбрасываем прогресс по городам, чтобы начать с начала выбранного города
+
             for n_city, city in enumerate(cities):
                 if n_region == indexes["region"] and n_city < indexes["city"]:
                     continue  # Пропускаем уже обработанные города
@@ -772,9 +781,9 @@ class olxParser:
                 categories = await self.get_items_count_for_all_categories(region.id, city.id, region.name, city.name)
 
                 if not categories:
-                    print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  🆔  {city.id} · Город:     {LIGHT_YELLOW}{city.name}{WHITE} | Объявлений не найдено")
+                    print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  🆔  {city.id} · Город:  {LIGHT_YELLOW}{city.name}{WHITE} | Объявлений не найдено")
                 else:
-                    print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  🆔  {city.id} · Город:     {LIGHT_YELLOW}{city.name}{WHITE}")
+                    print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  🆔  {city.id} · Город:  {LIGHT_YELLOW}{city.name}{WHITE}")
                     print('─' * 50)
 
                     for n_category, category in enumerate(categories):
@@ -790,7 +799,7 @@ class olxParser:
                         max_offers = offers_count.visible_total
 
                         total_collected += max_offers
-                        print(f"{LIGHT_BLUE}[{n_category + 1} / {len(categories)}]{WHITE} |   🆔  {category.id} · {LIGHT_YELLOW}{category_name}{WHITE} | "
+                        print(f"{LIGHT_BLUE}[{n_category + 1} / {len(categories)}]{WHITE} |   🆔  {category.id} · {YELLOW}{category_name[:100].ljust(100)}{WHITE} | "
                               f"📰  {BOLD}{LIGHT_MAGENTA}{offers_count.total}{RESET} / "
                               f"📚  {BOLD}{LIGHT_CYAN}{total_pages}{RESET}{WHITE} / "
                               f"📥  {BOLD}{RED}{max_offers}{RESET}{WHITE} / "
@@ -811,3 +820,12 @@ class olxParser:
             break
 
         logger.info(f"✅  Парсинг завершён. Всего собрано объявлений: {total_collected}")
+        os.startfile(self.data_dir)
+
+        print('\n[процесс завершил работу с кодом 0]')
+        while True:
+            answer = input(f"Теперь вы можете закрыть этот терминал с помощью клавиши {UNDERLINED}Q{RESET}{WHITE}. Или нажмите клавишу {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска.")
+            if answer.lower() == 'q' or answer.lower() == 'й':
+                break
+            os.system("cls")
+            os.execl(sys.executable, sys.executable, *sys.argv)
