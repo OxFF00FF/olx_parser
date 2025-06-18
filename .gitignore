@@ -1,0 +1,7 @@
+.idea
+.venv
+data
+logs
+tests
+.env
+*.txt
