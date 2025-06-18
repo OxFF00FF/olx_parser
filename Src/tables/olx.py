@@ -158,7 +158,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
 
     logger.info("🔄  Форматирование строк")
     total_rows = output_ws.max_row - 1
-    for row in tqdm(output_ws.iter_rows(min_row=15_000, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", ncols=120, bar_format=bar, leave=False, ascii=' ▱▰'):
+    for row in tqdm(output_ws.iter_rows(min_row=2, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", ncols=120, bar_format=bar, leave=False, ascii=' ▱▰'):
         for col_idx, cell in enumerate(row, 1):
             val_str = str(cell.value) if cell.value is not None else ''
             cell.alignment = Alignment(horizontal='left')
@@ -171,7 +171,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
             offer_url = str(url_cell.value)
 
             if offer_url:
-                title_cell.hyperlink = offer_url
+                title_cell.value = f'=HYPERLINK("{offer_url}", "{title_cell.value}")'
                 title_cell.font = hlink_style
 
                 url_cell.hyperlink = offer_url
