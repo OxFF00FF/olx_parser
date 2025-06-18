@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup as BS
 from openpyxl import load_workbook
 from tqdm.asyncio import tqdm_asyncio
 from yarl import URL
+from yaspin import yaspin
 
 from Src.app.colors import *
 from Src.app.config import app_config
@@ -707,13 +708,19 @@ class olxParser:
                 wb.save(wb_path)
 
     async def parse_phones_from_file(self, filename):
+        logger.info('🔄  Начинается сбор номеров из файла')
         if app_config.USE_PROXY:
-            logger.info("Использование прокси включено")
+            logger.info("ℹ️  Использование прокси включено")
+        time.sleep(1)
 
-        # Путь до merged таблицы. Открываем файл и делаем первую страницу активной
+        # Путь до merged таблицы
         wb_path = os.path.join(self.data_dir, filename)
-        wb = load_workbook(wb_path)
-        ws = wb.active
+
+        # Открываем файл и делаем первую страницу активной
+        with yaspin(text="Загружаем Excel-файл...") as spinner:
+            wb = load_workbook(wb_path)
+            spinner.ok('✅  Готово')
+            ws = wb.active
 
         # Добавляем стили ячеек в книгу
         register_styles(wb)
@@ -787,15 +794,15 @@ class olxParser:
 
                         total_collected += max_offers
                         print(f"{LIGHT_BLUE}[{n_category + 1} / {len(categories)}]{WHITE} |   🆔  {category.id} · {LIGHT_YELLOW}{category_name}{WHITE} | "
-                              f"Объявлений {BOLD}{LIGHT_MAGENTA}{offers_count.total}{RESET} / "
-                              f"Страниц {BOLD}{LIGHT_CYAN}{total_pages}{RESET}{WHITE} / "
-                              f"Cобрано {BOLD}{RED}{max_offers}{RESET}{WHITE} / "
-                              f"Всего собрано {total_collected}")
+                              f"📰  {BOLD}{LIGHT_MAGENTA}{offers_count.total}{RESET} / "
+                              f"📚  {BOLD}{LIGHT_CYAN}{total_pages}{RESET}{WHITE} / "
+                              f"📥  {BOLD}{RED}{max_offers}{RESET}{WHITE} / "
+                              f"📦  {total_collected}")
                         save_json({"region": n_region, "city": n_city, "category": n_category + 1}, indexes_path)
 
                     time.sleep(1)
                     logger.info(f"✅  Сбор объявлений по всем категориям в {LIGHT_YELLOW}{region.name}{WHITE} города {LIGHT_YELLOW}{city.name}{WHITE} завершен")
-                    merge_city_offers(self.data_dir, region.name, region.id, city.name, city.id, self._bar, show_info=True)
+                    merge_city_offers(self.data_dir, region.name, region.id, city.name, city.id, self._bar)
 
                 break
 

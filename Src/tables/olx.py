@@ -103,7 +103,9 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info=True):
         logger.error(f"Не удалось сохранить EXCEL файл: {e}")
 
 
-def merge_city_offers(data_dir, region_name, region_id: int, city_name, city_id: int, bar, show_info=None):
+def merge_city_offers(data_dir, region_name, region_id: int, city_name, city_id: int, bar):
+    logger.info("🔄  Начинается объединение всех таблиц в одну")
+
     xlsx_path = os.path.join(data_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
     save_path = os.path.join(data_dir, f"merged_{region_name}_{city_name}.xlsx")
 
@@ -144,7 +146,9 @@ def merge_city_offers(data_dir, region_name, region_id: int, city_name, city_id:
         for row in data_rows:
             output_ws.append(row)
 
+    logger.info("✅  Объединение Завершено. Сохраение...")
     merged_wb.save(save_path)
+    logger.info("🔄  Файл сохранен. Начинается форматирование строк")
 
     total_rows = output_ws.max_row - 1
     for row in tqdm(output_ws.iter_rows(min_row=2, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", ncols=150, bar_format=bar, leave=False, ascii=' ▱▰'):
@@ -169,10 +173,9 @@ def merge_city_offers(data_dir, region_name, region_id: int, city_name, city_id:
         output_ws.column_dimensions[get_column_letter(col_idx)].width = min(width, 100)
 
     try:
-        logger.info("💾  Сохранение")
+        logger.info("✅  Форматирование завершено. Сохранение...")
         merged_wb.save(save_path)
-        if show_info:
-            logger.info(f"💾  {LIGHT_GREEN}Объединенный Excel файл сохранен по пути `{save_path}` {WHITE}")
+        logger.info(f"💾  {LIGHT_GREEN}Объединенный Excel файл сохранен по пути `{save_path}` {WHITE}")
         time.sleep(1)
         print()
 

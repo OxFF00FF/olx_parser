@@ -36,6 +36,7 @@ async def main():
                 logger.error(f'Нет такого региона: {choosed_region_id}')
                 exit()
 
+            os.system("cls")
             region = next((r for r in regions if r.id == int(choosed_region_id)), None)
             logger.info(f'ℹ️  Выбран регион: {region.name}(🆔  {region.id})')
 
@@ -49,6 +50,7 @@ async def main():
             if choosed_num.isdigit():
                 choosed_idx = int(choosed_num) - 1
                 if 0 <= choosed_idx < len(files):
+                    os.system("cls")
                     choosed_filename = files[choosed_idx]
                     await parser.parse_phones_from_file(choosed_filename)
                 else:
