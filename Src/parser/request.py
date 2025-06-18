@@ -1,6 +1,7 @@
 import asyncio
 
 from curl_cffi import AsyncSession
+from curl_cffi.requests.exceptions import DNSError
 
 from Src.app.config import app_config
 from Src.app.logging_config import logger
@@ -76,6 +77,10 @@ async def get_data(
                         return status, response.text
                 else:
                     return status, response.text
+
+        except DNSError:
+            logger.error(f'Не удалось выполнить запрос, проверьте подключение к интернету')
+            exit()
 
         except Exception as e:
             if app_config.DEBUG:
