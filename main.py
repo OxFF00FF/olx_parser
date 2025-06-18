@@ -58,7 +58,7 @@ async def main():
 
         else:
             print(f"\n{LIGHT_RED}🚫  Такой опции нет: {choice}{WHITE}")
-    #
+
     except Exception as e:
         logger.error(f"{RED}🚫  Произошла неожиданная ошибка: {e}{WHITE}")
         logger.error(traceback.format_exc())
