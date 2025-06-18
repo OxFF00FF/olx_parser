@@ -728,7 +728,7 @@ class olxParser:
         total_offers = len(offers_data)
         save_every_n = 10
 
-        pbar = tqdm_asyncio(total=total_offers, desc='🔄  Парсим номер телефонов', bar_format=self._bar, ncols=200, leave=False, ascii=' ▱▰')
+        pbar = tqdm_asyncio(total=total_offers, desc='🔄  Парсим номер телефонов', bar_format=self._bar, ncols=self._cols, leave=False, ascii=' ▱▰')
 
         tasks = [
             self.fetch_and_write_phone(n, item, ws, wb, wb_path, save_every_n, pbar)

@@ -110,7 +110,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
     time.sleep(1)
 
     xlsx_path = os.path.join(data_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
-    save_path = os.path.join(data_dir, f"merged_{region_name}_{city_name}.xlsx")
+    save_path = os.path.join(data_dir, f"merged_{region_name}_{region_id}__{city_name}_{city_id}.xlsx")
 
     merged_wb = Workbook()
     output_ws = merged_wb.active
