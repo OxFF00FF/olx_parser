@@ -4,5 +4,5 @@ data
 logs
 tests
 .env
-*.txt
+proxies.txt
 *.bak
