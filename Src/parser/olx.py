@@ -17,8 +17,8 @@ from Src.app.logging_config import logger
 from Src.parser.constants import limit
 from Src.parser.request import get_data
 from Src.parser.schemas import Context, Token, OfferID, Region, City, Category, OffersMeta, Offer
-from Src.parser.utils import open_json, format_date, save_json, validate_filename
-from Src.tables.olx import save_offers_excel, merge_city_offers, register_styles
+from Src.parser.utils import open_json, format_date, save_json
+from Src.tables.olx import merge_city_offers, register_styles, save_offers
 
 
 class olxParser:
@@ -120,6 +120,7 @@ class olxParser:
 
         else:
             logger.error(f"⚠️  Unexpected status: {status}")
+            print(response)
             return {}
 
     @staticmethod
@@ -491,7 +492,7 @@ class olxParser:
         next_page = response.get('links', {}).get('next', {}).get('href')
         return offers, next_page
 
-    async def get_offers_from_api(self, category_id: int, region_id: int = None, city_id: int = None, region_name=None, city_name=None, category_name=None) -> list[Offer]:
+    async def get_offers_from_api(self, category_id: int, region_id: int = None, city_id: int = None) -> list[Offer]:
         """
         Получает объявления со всех доступных страниц через API
         """
@@ -519,19 +520,7 @@ class olxParser:
         for response in results:
             all_offers_raw.extend(response.get('data', []))
 
-        all_formatted_offers = [self._format_offer(offer) for offer in all_offers_raw]
-
-        filename = validate_filename(f'{region_id}_{city_id}_{category_id}_{category_name}__offers')
-        file_path = os.path.join(self.out_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
-        os.makedirs(file_path, exist_ok=True)
-
-        if self._save_json:
-            save_json([item.model_dump() for item in all_formatted_offers], os.path.join(self.out_dir, f'{filename}.json'))
-
-        if self._save_xls:
-            save_offers_excel(all_formatted_offers, os.path.join(file_path, f'{filename}.xlsx'), show_info=False)
-
-        return all_formatted_offers
+        return [self._format_offer(offer) for offer in all_offers_raw]
 
     async def get_offers_from_graphql(self, page=None, category_id=None, region_id=None, city_id=None, currency=None):
         if page is None or page < 1:
@@ -639,7 +628,6 @@ class olxParser:
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
             'x-client': 'DESKTOP',
             'x-device-id': 'aad787b0-7b98-4713-8c81-138e4e6a8cf5',
-            'x-fingerprint': 'fbdc4f53959cdb4a0ca0f7f0d089ca8a00ab77cc9433c497f1625c5c241a92a96255da10575393646255da105753936456b16d11aecc818682e4cda99633e224801d6b5073f992cf6255da10575393646255da105753936429b755643a58ca1b1aefb6d01788d83ee631c3c89377a0bb2601616aab71baecef069f2845625c9400ab77cc9433c497891f9a6cd62a20c76255da10575393646c965795e32157df98daddc4149516404c900da77a01aaf0f468b02e41e0779b745ddd797fe8df60a8e06d4216f6691883bb1eb95319dd525a1778be62509b003fef60c9cf99daee308e012c59cf7bddb497a357830277b80e237be963e4974ea1173d4df7b0c2973a4962d8c4406b9ad68312ea0894c563f156e5528257f9399c5fc99f16cb2f54525fa71314aa02ef8ac63dd7ad0259d2bd311f3bba6612844aba36199bc028784aba36199bc028784aba36199bc028784aba36199bc028784aba36199bc028784aba36199bc028784aba36199bc028784aba36199bc028784aba36199bc028784aba36199bc0287899424db0dded4c09',
             'x-platform-type': 'mobile-html5',
         }
 
@@ -670,11 +658,15 @@ class olxParser:
         if isinstance(has_phone, str) and has_phone == 'False':
             number_cell.value = 'не указан'
             number_cell.style = 'not_found_style'
-            wb.save(wb_path)
+            pbar.set_description_str(f"SKIPPED:  Не указан номер")
+            pbar.update(1)
+            time.sleep(0.5)
             return
 
         if isinstance(has_phone, str) and has_phone in ('скрыт', 'удален'):
-            pbar.set_description_str(f"SKIPPED")
+            pbar.set_description_str(f"SKIPPED:  Номер скрыт или объявление удалено")
+            pbar.update(1)
+            time.sleep(0.5)
             return
 
         async with self._semaphore:
@@ -682,8 +674,6 @@ class olxParser:
 
         if 'error' in response:
             error = response.get('error', {}).get('detail')
-            pbar.set_description_str(f"❌  {error} · {url}")
-
             if error == 'Disallowed for this user':
                 number_cell.value = 'скрыт'
                 number_cell.style = 'not_instock_style'
@@ -692,13 +682,16 @@ class olxParser:
                 number_cell.style = 'removed_style'
             elif 'Невозможно продолжить' in error:
                 number_cell.value = 'Captcha'
+            pbar.set_description_str(f"{LIGHT_RED}❌  {error}{WHITE} · {url}")
+            time.sleep(0.5)
         else:
             phones_data = response.get('data', {}).get('phones', [])
             number = phones_data[0] if phones_data else None
             if number:
                 number_cell.value = number
                 number_cell.style = 'active_style'
-                pbar.set_description_str(f"✅  {number} · {url}")
+                pbar.set_description_str(f"{LIGHT_GREEN}✅  {number}{WHITE} · {url}")
+                time.sleep(0.5)
 
         pbar.update(1)
 
@@ -717,10 +710,10 @@ class olxParser:
         wb_path = os.path.join(self.data_dir, filename)
 
         # Открываем файл и делаем первую страницу активной
-        with yaspin(text="Загружаем Excel-файл...") as spinner:
+        with yaspin(text="Чтение файла") as spinner:
             wb = load_workbook(wb_path)
-            spinner.ok('✅  Готово')
             ws = wb.active
+            spinner.ok('✅  Готово')
 
         # Добавляем стили ячеек в книгу
         register_styles(wb)
@@ -730,7 +723,7 @@ class olxParser:
         total_offers = len(offers_data)
         save_every_n = 10
 
-        pbar = tqdm_asyncio(total=total_offers, desc='🔄  Парсим номер телефонов', bar_format=self._bar, ncols=200, leave=False, ascii=' ▱▰')
+        pbar = tqdm_asyncio(total=total_offers, desc='🔄  Парсим номер телефонов', bar_format=self._bar, ncols=self._cols, leave=False, ascii=' ▱▰')
 
         tasks = [
             self.fetch_and_write_phone(n, item, ws, wb, wb_path, save_every_n, pbar)
@@ -741,7 +734,10 @@ class olxParser:
         await asyncio.gather(*tasks)
 
         pbar.close()
-        wb.save(wb_path)
+
+        with yaspin(text="Чтение файла") as spinner:
+            wb.save(wb_path)
+            spinner.ok('✅  Готово ')
 
     async def run(self, region_id=None):
         """
@@ -786,7 +782,8 @@ class olxParser:
                             continue  # Пропускаем уже обработанные категории
 
                         category_name = await self.get_category_name(category.id)
-                        await self.get_offers_from_api(category.id, region.id, city.id, region.name, city.name, category_name)
+                        offers = await self.get_offers_from_api(category.id, region.id, city.id)
+                        save_offers(offers, region_id, region.name, city.id, city.name, category.id, category_name, self.out_dir, self._save_json, self._save_xls)
 
                         offers_count = await self.get_offers_count(category.id, region.id, city.id)
                         total_pages = (offers_count.visible_total + limit - 1) // limit
@@ -798,17 +795,18 @@ class olxParser:
                               f"📚  {BOLD}{LIGHT_CYAN}{total_pages}{RESET}{WHITE} / "
                               f"📥  {BOLD}{RED}{max_offers}{RESET}{WHITE} / "
                               f"📦  {total_collected}")
-                        save_json({"region": n_region, "city": n_city, "category": n_category + 1}, indexes_path)
+                        # save_json({"region": n_region, "city": n_city, "category": n_category + 1}, indexes_path)
 
+                    print('─' * 50)
                     time.sleep(1)
                     logger.info(f"✅  Сбор объявлений по всем категориям в {LIGHT_YELLOW}{region.name}{WHITE} города {LIGHT_YELLOW}{city.name}{WHITE} завершен")
                     merge_city_offers(self.data_dir, region.name, region.id, city.name, city.id, self._bar)
 
                 break
 
-            indexes["city"] = 0
-            indexes["category"] = 0
-            save_json({"region": n_region, "city": 0, "category": 0}, indexes_path)
+            # indexes["city"] = 0
+            # indexes["category"] = 0
+            # save_json({"region": n_region, "city": 0, "category": 0}, indexes_path)
 
             break
 

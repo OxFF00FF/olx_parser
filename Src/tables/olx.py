@@ -1,14 +1,16 @@
 import os
 import time
 
-from tqdm import tqdm
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, NamedStyle, PatternFill
 from openpyxl.utils import get_column_letter
+from tqdm import tqdm
+from yaspin import yaspin
 
 from Src.app.colors import *
 from Src.app.logging_config import logger
 from Src.parser.schemas import Offer
+from Src.parser.utils import validate_filename
 
 green_fill = PatternFill(start_color="47ff94", end_color="47ff94", fill_type="solid")
 orange_fill = PatternFill(start_color="ff6347", end_color="ff6347", fill_type="solid")
@@ -82,14 +84,14 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info=True):
             cell.alignment = Alignment(horizontal='left')
 
         # создание ссылки из названия товара
-        product_title_cell = ws.cell(row=ws.max_row, column=2)
-        product_title_cell.hyperlink = offer.url
-        product_title_cell.font = hlink_style
+        offer_title_cell = ws.cell(row=ws.max_row, column=2)
+        offer_title_cell.hyperlink = offer.url
+        offer_title_cell.font = hlink_style
 
         # создание ссылки для url
-        product_title_cell = ws.cell(row=ws.max_row, column=11)
-        product_title_cell.hyperlink = offer.url
-        product_title_cell.font = hlink_style
+        offer_url_cell = ws.cell(row=ws.max_row, column=11)
+        offer_url_cell.hyperlink = offer.url
+        offer_url_cell.font = hlink_style
 
     # Установка ширины колонок
     for col_num, width in column_widths.items():
@@ -103,8 +105,9 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info=True):
         logger.error(f"Не удалось сохранить EXCEL файл: {e}")
 
 
-def merge_city_offers(data_dir, region_name, region_id: int, city_name, city_id: int, bar):
-    logger.info("🔄  Начинается объединение всех таблиц в одну")
+def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name: str, city_id: int, bar):
+    logger.info("🔄  Объединение таблиц")
+    time.sleep(1)
 
     xlsx_path = os.path.join(data_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
     save_path = os.path.join(data_dir, f"merged_{region_name}_{city_name}.xlsx")
@@ -121,11 +124,11 @@ def merge_city_offers(data_dir, region_name, region_id: int, city_name, city_id:
 
     for filename in progress_bar:
         file_path = os.path.join(xlsx_path, filename)
-        progress_bar.set_description_str(f"🔄  Объединение {filename[:40]}...")
+        progress_bar.set_description_str(f"{filename[:50]}...")
 
-        wb = load_workbook(file_path)
-        ws = wb.active
-        rows = list(ws.iter_rows(values_only=True))
+        processed_wb = load_workbook(file_path)
+        processed_ws = processed_wb.active
+        rows = list(processed_ws.iter_rows(values_only=True))
 
         if not rows:
             continue
@@ -146,12 +149,16 @@ def merge_city_offers(data_dir, region_name, region_id: int, city_name, city_id:
         for row in data_rows:
             output_ws.append(row)
 
-    logger.info("✅  Объединение Завершено. Сохраение...")
-    merged_wb.save(save_path)
-    logger.info("🔄  Файл сохранен. Начинается форматирование строк")
+    logger.info("✅  Объединение завершено")
+    time.sleep(1)
 
+    with yaspin(text="Сохранение") as spinner:
+        merged_wb.save(save_path)
+        spinner.ok('✅  Готово')
+
+    logger.info("🔄  Форматирование строк")
     total_rows = output_ws.max_row - 1
-    for row in tqdm(output_ws.iter_rows(min_row=2, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", ncols=150, bar_format=bar, leave=False, ascii=' ▱▰'):
+    for row in tqdm(output_ws.iter_rows(min_row=15_000, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", ncols=120, bar_format=bar, leave=False, ascii=' ▱▰'):
         for col_idx, cell in enumerate(row, 1):
             val_str = str(cell.value) if cell.value is not None else ''
             cell.alignment = Alignment(horizontal='left')
@@ -160,24 +167,30 @@ def merge_city_offers(data_dir, region_name, region_id: int, city_name, city_id:
         # Добавление ссылок
         if len(row) >= 11:
             title_cell = row[1]  # 2-я колонка - Название
-            url_cell = row[10]  # 11-я колонка - URL
-            url = url_cell.value
-            if url:
-                title_cell.hyperlink = url
+            url_cell = row[10]   # 11-я колонка - URL
+            offer_url = str(url_cell.value)
+
+            if offer_url:
+                title_cell.hyperlink = offer_url
                 title_cell.font = hlink_style
-                url_cell.hyperlink = url
+
+                url_cell.hyperlink = offer_url
                 url_cell.font = hlink_style
 
     # Установка ширины колонок
     for col_idx, width in column_widths.items():
         output_ws.column_dimensions[get_column_letter(col_idx)].width = min(width, 100)
 
+    logger.info("✅  Форматирование завершено")
+    time.sleep(1)
+
     try:
-        logger.info("✅  Форматирование завершено. Сохранение...")
-        merged_wb.save(save_path)
+        with yaspin(text="Сохранение") as spinner:
+            merged_wb.save(save_path)
+            spinner.ok('✅  Готово')
+
         logger.info(f"💾  {LIGHT_GREEN}Объединенный Excel файл сохранен по пути `{save_path}` {WHITE}")
         time.sleep(1)
-        print()
 
     except PermissionError as e:
         logger.error(f"Не удалось сохранить EXCEL файл: {e}")
@@ -188,8 +201,19 @@ def register_styles(wb):
         if style.name not in wb.named_styles:
             wb.add_named_style(style)
 
-    add_style(number_style)
     add_style(active_status_style)
     add_style(removed_status_style)
     add_style(not_instock_status_style)
     add_style(not_found_style)
+
+
+def save_offers(content: list[Offer], region_id, region_name, city_id, city_name, category_id, category_name, out_dir, save_json, save_xls):
+    filename = validate_filename(f'{region_id}_{city_id}_{category_id}_{category_name}__offers')
+    file_path = os.path.join(out_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
+    os.makedirs(file_path, exist_ok=True)
+
+    if save_json:
+        save_json([item.model_dump() for item in content], os.path.join(out_dir, f'{filename}.json'))
+
+    if save_xls:
+        save_offers_excel(content, os.path.join(file_path, f'{filename}.xlsx'), show_info=False)
