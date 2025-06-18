@@ -5,3 +5,4 @@ logs
 tests
 .env
 *.txt
+*.bak
