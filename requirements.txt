@@ -17,7 +17,9 @@ pydantic_core==2.33.2
 pyfiglet==1.0.3
 python-dotenv==1.1.0
 soupsieve==2.7
+termcolor==2.3.0
 tqdm==4.67.1
 typing-inspection==0.4.1
 typing_extensions==4.14.0
 yarl==1.20.1
+yaspin==3.1.0
