@@ -38,7 +38,7 @@ async def main():
 
             os.system("cls")
             region = next((r for r in regions if r.id == int(choosed_region_id)), None)
-            logger.info(f'ℹ️  Выбран регион: {region.name}(🆔  {region.id})')
+            logger.info(f'ℹ️  Выбран регион: {region.name}({region.id})')
 
             await parser.run(region_id=region.id)
 
