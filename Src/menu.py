@@ -14,8 +14,9 @@ def banner():
 
 def main_menu():
     print(f'╭───────  ГЛАВНОЕ МЕНЮ  ─────────╮ \n'
-          f'1.  {LIGHT_YELLOW}Собрать объявления региона{WHITE} \n'
-          f'2.  {LIGHT_YELLOW}Собрать номера из файла{WHITE} \n'
+          f'1.  {LIGHT_YELLOW}Собрать объявления {LIGHT_BLUE}региона{WHITE} \n'
+          f'2.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_CYAN}файла{WHITE} \n'
+          f'3.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_MAGENTA}города{WHITE} \n'
           f'╰────────────────────────────────╯ \n')
 
 
@@ -88,7 +89,7 @@ async def choose_city(parser, region):
         exit(1)
 
 
-async def choose_file(parser):
+def choose_file():
     os.system("cls")
     files = files_list()
     choosed_file_num = input(f'{CYAN}▶️  Выберите файл (1-{len(files)}): {WHITE}')
@@ -99,7 +100,47 @@ async def choose_file(parser):
     choosed_idx = int(choosed_file_num) - 1
     if 0 <= choosed_idx < len(files):
         os.system("cls")
-        choosed_filename = files[choosed_idx]
-        await parser.parse_phones_from_file(choosed_filename)
+        return files[choosed_idx]
     else:
         print(f"{RED}❌  Неверный номер файла{WHITE}")
+
+
+def choose_parsed_city():
+    data_dir = 'data'
+
+    os.system("cls")
+    parsed_regions = [name for name in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, name))]
+    print('\n╭───────  ПОЛУЧЕННЫЕ РЕГИОНЫ  ───────╮ ')
+    for n, region in enumerate(parsed_regions):
+        region_name, region_id = region.split('_')
+        print(f'{n + 1}.  {LIGHT_YELLOW}{region_name.ljust(25)}{WHITE}  🆔  {region_id}')
+    print('╰────────────────────────────────────╯ \n')
+
+    choosed_region_id = input(f'{CYAN}▶️  Выберите регион ({WHITE}{BOLD}1-{len(parsed_regions)}{RESET}{CYAN}): {WHITE}')
+    region_dir = next((r for r in parsed_regions if r.split('_')[-1] == choosed_region_id), None)
+
+    os.system("cls")
+    parsed_cities = [name for name in os.listdir(os.path.join(data_dir, region_dir)) if os.path.isdir(os.path.join(data_dir, region_dir, name))]
+    print('\n╭────────  ПОЛУЧЕННЫЕ ГОРОДА  ──────╮ ')
+    for n, city in enumerate(parsed_cities):
+        city_name, city_id = city.split('_')
+        print(f'{n + 1}.  {LIGHT_YELLOW}{city_name.ljust(20)}{WHITE}  🆔  {city_id}')
+    print(f'╰───────────────────────────────────╯ \n')
+
+    choosed_city_num = input(f'{CYAN}▶️  Выберите город ({WHITE}{BOLD}1-{len(parsed_cities)}{RESET}{CYAN}): {WHITE}')
+    choosed_idx = int(choosed_city_num) - 1
+    if 0 <= choosed_idx < len(parsed_cities):
+        choosed_city_id = parsed_cities[choosed_idx].split('_')[-1]
+
+        city_dir = next((c for c in parsed_cities if c.split('_')[-1] == choosed_city_id), None)
+
+        os.system("cls")
+        print(f"\r✔️  Выбранный регион: {region_dir}")
+        print(f"\r✔️  Выбранынй город:  {city_dir}\n")
+
+        return [
+            os.path.join(os.path.join(region_dir, city_dir), file)
+            for file
+            in os.listdir(os.path.join(data_dir, region_dir, city_dir))
+            if file.endswith('xlsx')
+        ]
