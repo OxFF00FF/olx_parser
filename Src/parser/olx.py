@@ -40,6 +40,7 @@ class olxParser:
     _cols = 150
     _bar = WHITE + '{desc} ' + LIGHT_BLUE + '| {bar} |' + LIGHT_YELLOW + ' {n_fmt}/{total_fmt} ' + DARK_GRAY + ' [Прошло: {elapsed}c · Осталось: {remaining}c · {rate_fmt}]  ' + WHITE
     _txt_all_offers = f"🔄  Парсим объявления со всех страниц  "
+    _txt_numbers = f"🔄  Парсим номер телефонов  "
 
     def __init__(self, max_workers: int = 5, Json=None, Xlsx=None):
         self._workers = max_workers
@@ -452,7 +453,7 @@ class olxParser:
             in range(total_pages)
         ]
 
-        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, ncols=self._cols, bar_format=self._bar, ascii=' ▱▰')
+        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=' ▱▰')
         for response in results:
             html = self._get_html(response)
             data = self._find_json(html)
@@ -520,7 +521,7 @@ class olxParser:
             for url
             in page_urls
         ]
-        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, ncols=self._cols, bar_format=self._bar, leave=False, ascii=' ▱▰')
+        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=' ▱▰')
 
         for response in results:
             all_offers_raw.extend(response.get('data', []))
@@ -659,19 +660,26 @@ class olxParser:
         url = item[10]
         row_idx = n + 2
         number_cell = ws.cell(row=row_idx, column=3)
+        digits = ''.join(re.findall(r'\d+', has_phone))
 
         if isinstance(has_phone, str) and has_phone == 'False':
             number_cell.value = 'не указан'
             number_cell.style = 'not_found_style'
-            pbar.set_description_str(f"SKIPPED:  Не указан номер")
+            pbar.set_description_str(f"SKIPPED:  {DARK_GRAY}Не указан номер{WHITE}")
             pbar.update(1)
-            time.sleep(0.5)
+            time.sleep(0.1)
             return
 
         if isinstance(has_phone, str) and has_phone in ('скрыт', 'удален'):
-            pbar.set_description_str(f"SKIPPED:  Номер скрыт или объявление удалено")
+            pbar.set_description_str(f"⚠️  SKIPPED:  {LIGHT_RED}Номер скрыт или объявление удалено{WHITE}")
             pbar.update(1)
-            time.sleep(0.5)
+            time.sleep(0.1)
+            return
+
+        if isinstance(has_phone, str) and digits.isdigit():
+            pbar.set_description_str(f"⚠️  SKIPPED:  {LIGHT_GREEN}Номер уже получен{WHITE}")
+            pbar.update(1)
+            time.sleep(0.1)
             return
 
         async with self._semaphore:
@@ -688,7 +696,7 @@ class olxParser:
             elif 'Невозможно продолжить' in error:
                 number_cell.value = 'Captcha'
             pbar.set_description_str(f"{LIGHT_RED}❌  {error}{WHITE} · {url}")
-            time.sleep(0.5)
+            time.sleep(0.1)
         else:
             phones_data = response.get('data', {}).get('phones', [])
             number = phones_data[0] if phones_data else None
@@ -696,7 +704,7 @@ class olxParser:
                 number_cell.value = number
                 number_cell.style = 'active_style'
                 pbar.set_description_str(f"{LIGHT_GREEN}✅  {number}{WHITE} · {url}")
-                time.sleep(0.5)
+                time.sleep(0.1)
 
         pbar.update(1)
 
@@ -705,20 +713,23 @@ class olxParser:
             async with self._save_lock:
                 wb.save(wb_path)
 
-    async def parse_phones_from_file(self, filename):
-        logger.info('🔄  Начинается сбор номеров из файла')
-        if app_config.USE_PROXY:
-            logger.info("ℹ️  Использование прокси включено")
+    async def parse_phones_from_file(self, filename, show_info=True):
+        if show_info:
+            logger.info('🔄  Начинается сбор номеров из файла')
+            if app_config.USE_PROXY:
+                logger.info("ℹ️  Использование прокси включено")
         time.sleep(1)
 
         # Путь до merged таблицы
         wb_path = os.path.join(self.data_dir, filename)
 
         # Открываем файл и делаем первую страницу активной
-        with yaspin(text="Чтение файла") as spinner:
+        with yaspin(text="Чтение") as spinner:
             wb = load_workbook(wb_path)
             ws = wb.active
-            spinner.ok('✅  Готово')
+            if show_info:
+                spinner.text = 'Готово'
+                spinner.ok('✔️')
 
         # Добавляем стили ячеек в книгу
         register_styles(wb)
@@ -728,7 +739,7 @@ class olxParser:
         total_offers = len(offers_data)
         save_every_n = 10
 
-        pbar = tqdm_asyncio(total=total_offers, desc='🔄  Парсим номер телефонов', bar_format=self._bar, ncols=self._cols, leave=False, ascii=' ▱▰')
+        pbar = tqdm_asyncio(total=total_offers, desc=self._txt_numbers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=' ▱▰')
 
         tasks = [
             self.fetch_and_write_phone(n, item, ws, wb, wb_path, save_every_n, pbar)
@@ -740,14 +751,32 @@ class olxParser:
 
         pbar.close()
 
-        with yaspin(text="Сохранение файла") as spinner:
+        with yaspin(text="Сохранение") as spinner:
             wb.save(wb_path)
-            spinner.ok('✅  Готово')
+            if show_info:
+                spinner.text = 'Сохранено'
+                spinner.ok('✔️')
+
+            completed_wb_path = os.path.join(os.path.dirname(wb_path), f"+ {os.path.basename(wb_path)}")
+            os.rename(wb_path, completed_wb_path)
+
+        if show_info:
+            print('\n[процесс завершил работу с кодом 0]')
+            while True:
+                answer = input(f"Теперь вы можете закрыть этот терминал с помощью клавиши {UNDERLINED}Q{RESET}{WHITE}. Или нажмите клавишу {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска.")
+                if answer.lower() == 'q' or answer.lower() == 'й':
+                    break
+                os.system("cls")
+                os.execl(sys.executable, sys.executable, *sys.argv)
+
+            os.startfile(os.path.join(self.data_dir, os.path.dirname(wb_path)))
 
     async def run(self, region_id=None, city_id=None):
         """
         Запуск парсера. Если передан region_id, то обрабатывается только этот регион.
         """
+        help_message = f"\n{'─' * 50}  {' ' * 72}| 📰  {BOLD}{LIGHT_MAGENTA}Найдено{RESET} / 📚  {BOLD}{LIGHT_CYAN}Страниц{RESET} / 📥  {BOLD}{RED}Собрано{RESET}{WHITE} / 📦  Всего собрано"
+
         logger.info('ℹ️  Начинается сбор объявлений для выбранного региона и города')
         time.sleep(1)
 
@@ -778,14 +807,14 @@ class olxParser:
                 if n_region == indexes["region"] and n_city < indexes["city"]:
                     continue  # Пропускаем уже обработанные города
 
+                print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  🆔  {city.id} · Город:  {LIGHT_YELLOW}{city.name}{WHITE}", end="")
+
                 categories = await self.get_items_count_for_all_categories(region.id, city.id, region.name, city.name)
 
                 if not categories:
-                    print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  🆔  {city.id} · Город:  {LIGHT_YELLOW}{city.name}{WHITE} | Объявлений не найдено")
+                    print(" | Объявлений не найдено")
                 else:
-                    print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  🆔  {city.id} · Город:  {LIGHT_YELLOW}{city.name}{WHITE}")
-                    print('─' * 50)
-
+                    print(help_message)
                     for n_category, category in enumerate(categories):
                         if n_region == indexes["region"] and n_city == indexes["city"] and n_category < indexes["category"]:
                             continue  # Пропускаем уже обработанные категории
@@ -804,18 +833,18 @@ class olxParser:
                               f"📚  {BOLD}{LIGHT_CYAN}{total_pages}{RESET}{WHITE} / "
                               f"📥  {BOLD}{RED}{max_offers}{RESET}{WHITE} / "
                               f"📦  {total_collected}")
-                        # save_json({"region": n_region, "city": n_city, "category": n_category + 1}, indexes_path)
+                        save_json({"region": n_region, "city": n_city, "category": n_category + 1}, indexes_path)
 
-                    print('─' * 50)
+                    print(help_message)
                     time.sleep(1)
                     logger.info(f"✅  Сбор объявлений по всем категориям в {LIGHT_YELLOW}{region.name}{WHITE} города {LIGHT_YELLOW}{city.name}{WHITE} завершен")
                     merge_city_offers(self.data_dir, region.name, region.id, city.name, city.id, self._bar)
 
                 break
 
-            # indexes["city"] = 0
-            # indexes["category"] = 0
-            # save_json({"region": n_region, "city": 0, "category": 0}, indexes_path)
+            indexes["city"] = 0
+            indexes["category"] = 0
+            save_json({"region": n_region, "city": 0, "category": 0}, indexes_path)
 
             break
 
