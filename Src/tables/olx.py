@@ -10,7 +10,7 @@ from yaspin import yaspin
 from Src.app.colors import *
 from Src.app.logging_config import logger
 from Src.parser.schemas import Offer
-from Src.parser.utils import validate_filename
+from Src.parser.utils import validate_filename, clickable_file_link
 
 green_fill = PatternFill(start_color="47ff94", end_color="47ff94", fill_type="solid")
 orange_fill = PatternFill(start_color="ff6347", end_color="ff6347", fill_type="solid")
@@ -100,7 +100,7 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info=True):
     try:
         wb.save(filepath)
         if show_info:
-            logger.info(f"💾  {LIGHT_GREEN}Excel файл сохранен по пути `{filepath}` {WHITE}")
+            logger.info(f"💾  {LIGHT_GREEN}Файл сохранен в `{clickable_file_link(filepath)}` {WHITE}")
     except PermissionError as e:
         logger.error(f"Не удалось сохранить EXCEL файл: {e}")
 
@@ -120,7 +120,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
 
     xlsx_files = [f for f in os.listdir(xlsx_path) if f.endswith('xlsx')]
 
-    progress_bar = tqdm(xlsx_files, bar_format=bar, ncols=150, leave=False, ascii=' ▱▰')
+    progress_bar = tqdm(xlsx_files, bar_format=bar, dynamic_ncols=True, leave=False, ascii=' ▱▰')
 
     for filename in progress_bar:
         file_path = os.path.join(xlsx_path, filename)
@@ -154,11 +154,12 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
 
     with yaspin(text="Сохранение") as spinner:
         merged_wb.save(save_path)
-        spinner.ok('✅  Готово')
+        spinner.text = 'Сохранено'
+        spinner.ok('✔️')
 
     logger.info("🔄  Форматирование строк")
     total_rows = output_ws.max_row - 1
-    for row in tqdm(output_ws.iter_rows(min_row=2, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", ncols=120, bar_format=bar, leave=False, ascii=' ▱▰'):
+    for row in tqdm(output_ws.iter_rows(min_row=2, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", bar_format=bar, dynamic_ncols=True, leave=False, ascii=' ▱▰'):
         for col_idx, cell in enumerate(row, 1):
             val_str = str(cell.value) if cell.value is not None else ''
             cell.alignment = Alignment(horizontal='left')
@@ -187,9 +188,10 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
     try:
         with yaspin(text="Сохранение") as spinner:
             merged_wb.save(save_path)
-            spinner.ok('✅  Готово')
+            spinner.text = 'Сохранено'
+            spinner.ok('✔️')
 
-        logger.info(f"💾  {LIGHT_GREEN}Объединенный Excel файл сохранен по пути `{save_path}` {WHITE}")
+        logger.info(f"💾  {LIGHT_GREEN}Файл сохранен в `{clickable_file_link(save_path)}` {WHITE}")
         time.sleep(1)
 
     except PermissionError as e:
