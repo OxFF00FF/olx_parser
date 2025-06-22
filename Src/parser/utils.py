@@ -155,3 +155,14 @@ def create_banner(words_and_colors, show=False):
         print(f"\n{result}{WHITE}")
 
     return result
+
+
+def clickable_file_link(filepath):
+    uri_path = filepath.replace("\\", "/")
+    uri = f"file:///{uri_path}"
+
+    # OSC 8 escape-последовательность для ссылки
+    esc = "\033]8;;" + uri + "\033\\"
+    esc_end = "\033]8;;\033\\"
+
+    return f"{esc}{filepath}{esc_end} {WHITE}({UNDERLINED}CTRL+ПКМ{RESET}{WHITE} чтобы открыть)"
