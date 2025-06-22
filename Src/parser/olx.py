@@ -83,8 +83,8 @@ class olxParser:
     def _get_html(html_text: str) -> BS:
         try:
             return BS(html_text, 'html.parser')
-        except Exception as e:
-            raise e
+        except:
+            raise
 
     @staticmethod
     def _find_json(html: BS):
@@ -122,6 +122,11 @@ class olxParser:
 
         elif status == 400:
             return response
+
+        elif status == 500:
+            logger.error(f'⚠️  Не удалось выполнить запрос: Статус: {status} · {response}')
+            if '407' in response:
+                raise RuntimeError("Неверные данные для авторизации прокси")
 
         else:
             logger.error(f"⚠️  Unexpected status: {status}")
@@ -682,8 +687,12 @@ class olxParser:
             time.sleep(0.1)
             return
 
-        async with self._semaphore:
-            response = await self._make_request(f'{self.__api_offers_url}/{offer_id}/limited-phones/', json_response=True, use_proxy=True)
+        try:
+            async with self._semaphore:
+                response = await self._make_request(f'{self.__api_offers_url}/{offer_id}/limited-phones/', json_response=True, use_proxy=True)
+        except Exception as e:
+            time.sleep(1)
+            raise e
 
         if 'error' in response:
             error = response.get('error', {}).get('detail')
