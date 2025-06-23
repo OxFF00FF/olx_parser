@@ -36,14 +36,15 @@ class City(BaseModel):
 
 class Category(BaseModel):
     id: int = Field(ge=1)
-    count: int | None = None
-    name: str | None = None
+    count: int = None
+    name: str = None
+    parent_id: int = None
 
-    def __init__(self, id: int, name: str | None, count: int | None):
-        super().__init__(id=id, name=name, count=count)
+    def __init__(self, id: int, name: str | None, count: int, parent_id: int):
+        super().__init__(id=id, name=name, count=count, parent_id=parent_id)
 
     def __repr__(self):
-        return f"Category(id={self.id}, name={self.name}, count={self.count})"
+        return f"Category(id={self.id}, name={self.name}, count={self.count}, parent_id={self.parent_id})"
 
     def __str__(self):
         return f"Category={self.id}, {self.name}, {self.count}"
