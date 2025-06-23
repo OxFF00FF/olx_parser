@@ -3,8 +3,6 @@ import json
 import os
 import sys
 import time
-import uuid
-from datetime import datetime
 
 from bs4 import BeautifulSoup as BS
 from openpyxl import load_workbook
@@ -17,7 +15,8 @@ from Src.app.config import app_config
 from Src.app.logging_config import logger
 from Src.parser.constants import limit
 from Src.parser.request import get_data
-from Src.parser.schemas import Context, Token, OfferID, Region, City, Category, OffersMeta, Offer
+from Src.parser.schemas import OfferID, Region, City, Category, OffersMeta, Offer
+from Src.parser.credentials import get_token
 from Src.parser.utils import open_json, format_date, save_json
 from Src.tables.olx import merge_city_offers, register_styles, save_offers
 
@@ -100,40 +99,6 @@ class olxParser:
 
         return json.loads(json.loads(match.group(1)))
 
-    async def _make_request(self, url, headers=None, data=None, payload=None, json_response=None, use_proxy=False) -> str | dict | None:
-        """
-        Делает запрос и проверяет статус ответа
-        """
-        logger.debug(url)
-        if not url:
-            logger.error(f'⚠️  Не удалось получить ответ для URL · {url}')
-            return None
-
-        headers = headers or self._get_headers()
-        cookies = self._get_cookies()
-
-        status, response = await get_data(url, headers, cookies, data, payload, Json=json_response, use_proxy=use_proxy)
-        if status == 200:
-            return response
-
-        elif status == 404:
-            logger.error("Объявление не найдено или удалено")
-            return response if json_response else None
-
-        elif status == 400:
-            return response
-
-        elif status == 500:
-            logger.error(f'⚠️  Не удалось выполнить запрос: Статус: {status} · {response}')
-            if '407' in response:
-                raise RuntimeError("Неверные данные для авторизации прокси")
-
-        else:
-            logger.error(f"⚠️  Unexpected status: {status}")
-            html = self._get_html(response)
-            logger.error(f"⚠️  {html.select_one('title').get_text()} · {url}")
-            return {}
-
     @staticmethod
     def _format_offer(data: dict) -> Offer:
         offer = Offer()
@@ -165,6 +130,46 @@ class olxParser:
 
         return offer
 
+    async def _make_request(self, url, headers=None, data=None, payload=None, json_response=None, use_proxy=False) -> str | dict | None:
+        """
+        Делает запрос и проверяет статус ответа
+        """
+        logger.debug(url)
+        if not url:
+            logger.error(f'⚠️  Не удалось получить ответ для URL · {url}')
+            return None
+
+        headers = headers or self._get_headers()
+        cookies = self._get_cookies()
+
+        status, response = await get_data(url, headers, cookies, data, payload, Json=json_response, use_proxy=use_proxy)
+        if status == 200:
+            return response
+
+        elif status == 404:
+            logger.error("Объявление не найдено или удалено")
+            return response if json_response else None
+
+        elif status == 400:
+            return response
+
+        elif status == 500:
+            logger.error(f'⚠️  Не удалось выполнить запрос: {status} · {response}')
+            if '407' in response:
+                raise RuntimeError("Неверные данные для авторизации прокси")
+
+        else:
+            logger.error(f"⚠️  Unexpected status: {status} · {url}")
+            try:
+                html = self._get_html(response)
+                logger.warning(f"⚠️  {html.select_one('title').get_text()} · {url}")
+            except Exception as e:
+                logger.info(f"Failed to get html: {e} · {url}")
+            return {}
+
+    def update_token(self):
+        self._token = get_token()
+
     async def _pagination(self, category_url) -> int:
         logger.info(category_url)
 
@@ -177,6 +182,20 @@ class olxParser:
         if match:
             data = json.loads(json.loads(match.group(1)))
             return data.get('listing', {}).get('listing', {}).get('totalPages', 0)
+
+    async def get_categories(self):
+        """
+        Получает список всех категорий
+        """
+        payload = {
+            'operationName': 'InventoryMetadata',
+            'variables': {},
+            'query': 'query InventoryMetadata {\n  categories {\n    id\n    name\n    parent_id\n  }\n}',
+        }
+        url = 'https://production-graphql.eu-sharedservices.olxcdn.com/graphql'
+        response = await self._make_request(url, payload=payload, json_response=True)
+        data = response.get('data').get('categories')
+        return [Category(item.get('id'), item.get('name'), 0, item.get('parent_id')) for item in data]
 
     async def _get_offer_id(self, url: str) -> OfferID:
         """
@@ -204,110 +223,6 @@ class olxParser:
             return await self._make_request(url, json_response=True)
         except Exception as e:
             logger.error(f"Failed to get offer_data for `{ad_id}`. Error: {e} · {url}")
-
-    async def find_available_offers(self, start: int = None, end: int = None):
-        """
-
-        :param start:
-        :param end:
-        """
-        start_n = start or 800_000_000
-        end_n = end or 900_000_000
-
-        for i in range(start_n, end_n):
-            url = f'{self.__base_url}/api/v1/offers/{i}/'
-            response = await self._make_request(url)
-
-            data = json.loads(response)
-            if 'error' in data:
-                logger.error(f"{url} · {data.get('error', {}).get('status')}")
-                continue
-
-            if not data:
-                logger.info(f"{url} · {data}")
-
-            if data:
-                title = data.get('data', {}).get('title')
-                ad_url = data.get('data', {}).get('url')
-                logger.info(f"{title} · {url} · {ad_url}")
-
-    async def _get_challenge_context(self, ad_id: OfferID, ad_url: str) -> Context | None:
-        """
-
-        """
-        username = str(uuid.uuid4())
-        url = 'https://friction.olxgroup.com/challenge'
-
-        headers = self._get_headers().update({'x-user-tests': 'eyJkZWx1YXJlYi0zNjgwIjoiYSIsImR2LTMyMzkiOiJiIiwiam9icy04NjE3IjoiYSIsImpvYnMtODYzNiI6ImIiLCJvZWNzLTEwMDIiOiJjIiwib2x4ZXUtNDI0NDgiOiJiIiwicG9zLTEwNzciOiJiIn0='})
-        payload = {
-            'action': 'reveal_phone_number',
-            'aud': 'atlas',
-            'actor': {
-                'username': username,
-            },
-            'scene': {
-                'origin': 'www.olx.ua',
-                'sitecode': 'olxua',
-                'ad_id': ad_id,
-            },
-        }
-
-        response = await self._make_request(url, headers, payload)
-        try:
-            data = json.loads(response)
-            context = data.get('context')
-            if not context:
-                if data.get('challenge', {}).get('type') == 'blocked':
-                    logger.error(f"Failed to get challenge_context for `{ad_id}`. Message: IP Blocked")
-                    return None
-
-                current_time = int(time.time())
-                wait_until_timestamp = int(data.get('challenge', {}).get('config', {}).get('waitUntil'))
-
-                wait_until_datetime = datetime.utcfromtimestamp(wait_until_timestamp)
-                remaining_time = wait_until_timestamp - current_time
-
-                hours = remaining_time // 3600
-                remaining_seconds = remaining_time % 3600
-                minutes = remaining_seconds // 60
-                seconds = remaining_seconds % 60
-
-                formatted_datetime = wait_until_datetime.strftime("%Y-%m-%d %H:%M:%S UTC")
-                formatted_time = f"{hours:02}:{minutes:02}:{seconds:02}"
-
-                logger.error(f"Failed to get challenge_context for `{ad_id}`. Message: Too many requests. Try in {formatted_datetime}. Remain: {formatted_time} · {ad_url}")
-                return None
-
-            logger.debug(f"{username=} · {context=}")
-            return Context(value=context)
-
-        except Exception as e:
-            logger.error(f"Failed to get challenge_context for `{ad_id}`. Error: {e} · {ad_url}")
-
-    async def _get_authorization_token(self, context: Context, ad_url: str) -> Token | None:
-        """
-
-        """
-        url = 'https://friction.olxgroup.com/exchange'
-        headers = self._get_headers()
-        payload = {
-            'context': context,
-            'response': ''
-        }
-
-        response = await self._make_request(url, headers, payload)
-        try:
-            data = json.loads(response)
-            authorization_token = data.get('token')
-            if not authorization_token:
-                logger.error(f"Failed to get authorization_token. Message: {data.get('error')} · {ad_url}")
-                return None
-
-            logger.debug(f"{authorization_token=}")
-            return Token(value=authorization_token)
-
-        except Exception as e:
-            logger.error(f"Failed to get authorization_token. Error: {e} · {ad_url}")
 
     async def get_regions(self, sorting_by='id') -> list[Region]:
         """
@@ -613,86 +528,101 @@ class olxParser:
 
         if self._save_json:
             save_json(data, os.path.join(self.out_dir, f'{region_id}_{region_name}_{city_name}__categories.json'))
-        return [Category(id=item['id'], count=item['count'], name=None) for item in categories]
+        return [Category(item['id'], None, item['count'], 0) for item in categories]
 
-    async def get_phone_numbers(self, ad_id: OfferID, ad_url: str) -> list[str, ...]:
-        """
-
-        """
-        numbers = []
-        url = f'{self.__base_url}/api/v1/offers/{ad_id}/limited-phones/'
-
-        context = await self._get_challenge_context(ad_id, ad_url)
-        token = await self._get_authorization_token(context, ad_url)
-
+    async def get_phone_number(self, ad_id: OfferID, token=None, use_proxy=None) -> str | None:
         headers = {
-            'accept': '*/*',
-            'accept-language': 'uk',
-            'friction-token': token,
-            'priority': 'u=1, i',
-            'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="132", "Google Chrome";v="132"',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'cache-control': 'no-cache',
+            'pragma': 'no-cache',
+            'priority': 'u=0, i',
+            'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
-            'x-client': 'DESKTOP',
-            'x-device-id': 'aad787b0-7b98-4713-8c81-138e4e6a8cf5',
-            'x-platform-type': 'mobile-html5',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'none',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
         }
 
-        if not context and not token:
-            logger.error(f"Failed to get phone_numbers for `{ad_id}` · {ad_url}")
-            return numbers
+        if token:
+            headers['authorization'] = token
+        else:
+            headers['authorization'] = get_token()
+
+        phones = []
+        url = f'{self.__base_url}/api/v1/offers/{ad_id}/limited-phones/'
 
         try:
-            response = await self._make_request(url, headers=headers, json_response=True)
-            data = response.get('data', {}).get('phones', [])
-            if not numbers:
-                status = data.get('error').get('status')
-                error = data.get('error').get('title')
-                message = data.get('error').get('detail')
-                logger.error(f"Failed to get phone_numbers for `{ad_id}` · {error} {status} · {message} · {ad_url}")
-            return numbers
+            async with self._semaphore:
+                data = await self._make_request(url, headers, json_response=True, use_proxy=use_proxy)
 
-        except Exception as e:
-            logger.error(f"Failed to get phone_numbers for `{ad_id}`. Error: {e} · {ad_url}")
+                if 'error' in data:
+                    error = data.get('error')
+                    if isinstance(error, str):
+                        logger.error(f"⛔  {data.get('error_description')}")
 
-    async def fetch_and_write_phone(self, n, item, ws, wb, wb_path, save_every_n, pbar):
+                        headers['authorization'] = get_token()
+                        data2 = await self._make_request(url, headers, json_response=True, use_proxy=use_proxy)
+                        phones = data2.get('data', {}).get('phones', [])
+                    elif isinstance(error, dict):
+                        logger.error(f"⚠️  {data.get('error', {}).get('detail')}")
+                        return None
+                    else:
+                        logger.error(error)
+
+                else:
+                    phones = data.get('data', {}).get('phones', [])
+                return ' · '.join([str(p) for p in phones]) if phones else None
+
+        except:
+            logger.error(f"⚠️  Failed to get phone_numbers: {self.__api_offers_url}/{ad_id}")
+
+    async def fetch_and_write_phone(self, n, item, total, ws, wb, wb_path, save_every_n):
+        """
+        :param n: Текущая итерация
+        :param item: Данные объявления
+        :param total: Общее количество обхявлений в файле
+        :param ws: Рабочий лист
+        :param wb: Рабочая книга
+        :param wb_path: Путь до файла
+        :param save_every_n: Сохранение файла каждые x итераций
+        :return:
+        """
         offer_id = item[0]
         has_phone = item[2]
         url = item[10]
         row_idx = n + 2
         number_cell = ws.cell(row=row_idx, column=3)
         digits = ''.join(re.findall(r'\d+', has_phone))
+        progress = f"[{n} / {total}]"
 
         if isinstance(has_phone, str) and has_phone == 'False':
             number_cell.value = 'не указан'
             number_cell.style = 'not_found_style'
-            pbar.set_description_str(f"SKIPPED:  {DARK_GRAY}Не указан номер{WHITE}")
-            pbar.update(1)
-            time.sleep(0.1)
+            print(f"{progress}  SKIPPED:  {DARK_GRAY}Не указан номер{WHITE}")
             return
 
-        if isinstance(has_phone, str) and has_phone in ('скрыт', 'удален'):
-            pbar.set_description_str(f"⚠️  SKIPPED:  {LIGHT_RED}Номер скрыт или объявление удалено{WHITE}")
-            pbar.update(1)
-            time.sleep(0.1)
+        if isinstance(has_phone, str) and has_phone in 'удален':
+            print(f"{progress}  SKIPPED:  {LIGHT_RED}Объявление удалено{WHITE}")
             return
 
         if isinstance(has_phone, str) and digits.isdigit():
-            pbar.set_description_str(f"⚠️  SKIPPED:  {LIGHT_GREEN}Номер уже получен{WHITE}")
-            pbar.update(1)
-            time.sleep(0.1)
+            print(f"{progress}  SKIPPED:  {LIGHT_GREEN}Номер уже получен{WHITE}")
+            return
+
+        if isinstance(has_phone, str) and has_phone in 'скрыт':
+            print(f"{progress}  SKIPPED:  {LIGHT_RED}Номер был скрыт{WHITE}")
             return
 
         try:
             async with self._semaphore:
                 response = await self._make_request(f'{self.__api_offers_url}/{offer_id}/limited-phones/', json_response=True, use_proxy=True)
-        except Exception as e:
-            time.sleep(1)
-            raise e
+        except:
+            raise
 
         if 'error' in response:
             error = response.get('error', {}).get('detail')
@@ -704,18 +634,27 @@ class olxParser:
                 number_cell.style = 'removed_style'
             elif 'Невозможно продолжить' in error:
                 number_cell.value = 'Captcha'
-            pbar.set_description_str(f"{LIGHT_RED}❌  {error}{WHITE} · {url}")
-            time.sleep(0.1)
-        else:
-            phones_data = response.get('data', {}).get('phones', [])
-            number = phones_data[0] if phones_data else None
-            if number:
-                number_cell.value = number
-                number_cell.style = 'active_style'
-                pbar.set_description_str(f"{LIGHT_GREEN}✅  {number}{WHITE} · {url}")
-                time.sleep(0.1)
 
-        pbar.update(1)
+            print(f"{progress}  {LIGHT_RED}❌  {error}{WHITE} · {url}")
+            if number_cell.value == 'скрыт':
+                phone = await self.get_phone_number(offer_id, use_proxy=True)
+                if phone:
+                    number_cell.value = phone
+                    number_cell.style = 'active_style'
+                    print(f"{progress}  {LIGHT_GREEN}✔️  Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
+                else:
+                    print(f"{progress}  {RED}❌  Номер не получен: {WHITE}{phone} · {url}")
+
+        else:
+            phones = response.get('data', {}).get('phones', [])
+            phone = ' · '.join([str(p) for p in phones]) if phones else None
+
+            if phone:
+                number_cell.value = phone
+                number_cell.style = 'active_style'
+                print(f"{progress}  {LIGHT_GREEN}✔️  Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
+            else:
+                print(f"{progress}  {RED}❌  Номер не получен: {WHITE}{phone} · {url}")
 
         # Сохраняем прогресс каждые N итераций
         if (n + 1) % save_every_n == 0:
@@ -723,11 +662,14 @@ class olxParser:
                 wb.save(wb_path)
 
     async def parse_phones_from_file(self, filename, show_info=True):
+        """
+        Парсит номера телефонов из переданной excel таблицы
+        """
         if show_info:
             logger.info('🔄  Начинается сбор номеров из файла')
             if app_config.USE_PROXY:
                 logger.info("ℹ️  Использование прокси включено")
-        time.sleep(1)
+            time.sleep(1)
 
         # Путь до merged таблицы
         wb_path = os.path.join(self.data_dir, filename)
@@ -748,17 +690,12 @@ class olxParser:
         total_offers = len(offers_data)
         save_every_n = 10
 
-        pbar = tqdm_asyncio(total=total_offers, desc=self._txt_numbers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=' ▱▰')
-
         tasks = [
-            self.fetch_and_write_phone(n, item, ws, wb, wb_path, save_every_n, pbar)
+            self.fetch_and_write_phone(n, item, total_offers, ws, wb, wb_path, save_every_n)
             for n, item
-            in enumerate(offers_data)
+            in enumerate(offers_data, start=1)
         ]
-
         await asyncio.gather(*tasks)
-
-        pbar.close()
 
         with yaspin(text="Сохранение") as spinner:
             wb.save(wb_path)
