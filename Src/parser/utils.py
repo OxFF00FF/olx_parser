@@ -15,6 +15,33 @@ from Src.app.logging_config import logger
 proxies_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.join(__file__)))), 'proxies.txt')
 
 
+def open_file(filepath: str) -> str:
+    with open(filepath, encoding='utf-8') as file:
+        return file.read()
+
+
+def save_file(filepath: str, content: str):
+    with open(filepath, 'w', encoding='utf-8') as file:
+        file.write(content)
+
+
+def save_html(html_text):
+    with open(f'index.html', 'w', encoding='utf-8') as file:
+        file.write('<meta charset="utf-8">' + html_text)
+
+
+def open_json(filepath: str = 'data.json'):
+    if not os.path.exists(filepath):
+        save_json({})
+
+    with open(filepath, encoding='utf-8') as file:
+        content = file.read()
+        if not content:
+            return {}
+        else:
+            return json.loads(content)
+
+
 def read_proxies():
     with open(proxies_file, 'r', encoding='utf-8') as file:
         return [item.strip() for item in file.readlines()]
@@ -94,14 +121,6 @@ def save_json(content: list | dict | str, filepath: str = 'data.json'):
 
     if app_config.DEBUG:
         logger.debug(f"{GREEN}💾  Data saved to `{os.path.join(filepath)}`{WHITE}")
-
-
-def open_json(filepath: str) -> list | dict | None:
-    try:
-        with open(filepath, encoding='utf-8') as f:
-            return json.loads(f.read())
-    except:
-        return None
 
 
 def format_date(iso_date):
