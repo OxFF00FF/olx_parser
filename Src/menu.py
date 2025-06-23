@@ -109,7 +109,7 @@ def choose_parsed_city():
     data_dir = 'data'
 
     os.system("cls")
-    parsed_regions = [name for name in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, name))]
+    parsed_regions = [name for name in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, name)) and name != 'profiles']
     print('\n╭───────  ПОЛУЧЕННЫЕ РЕГИОНЫ  ───────╮ ')
     for n, region in enumerate(parsed_regions):
         region_name, region_id = region.split('_')
@@ -136,7 +136,7 @@ def choose_parsed_city():
 
         os.system("cls")
         print(f"\r✔️  Выбранный регион: {region_dir}")
-        print(f"\r✔️  Выбранынй город:  {city_dir}\n")
+        print(f"\r✔️  Выбранынй город:  {city_dir}")
 
         return [
             os.path.join(os.path.join(region_dir, city_dir), file)
