@@ -162,9 +162,13 @@ class olxParser:
             logger.error(f"⚠️  Unexpected status: {status} · {url}")
             try:
                 html = self._get_html(response)
-                logger.warning(f"⚠️  {html.select_one('title').get_text()} · {url}")
+                tab_title = html.select_one('title').get_text()
+                if 'satisfied' in tab_title:
+                    logger.warning(f"⚠️  Request was rejected by CloudFront. {tab_title} · {url}")
+                else:
+                    logger.warning(f"⚠️  {tab_title} · {url}")
             except Exception as e:
-                logger.info(f"Failed to get html: {e} · {url}")
+                logger.error(f"⚠️  Failed parse html: {e} · {url}")
             return {}
 
     async def _pagination(self, category_url) -> int:
@@ -527,7 +531,7 @@ class olxParser:
             save_json(data, os.path.join(self.out_dir, f'{region_id}_{region_name}_{city_name}__categories.json'))
         return [Category(item['id'], None, item['count'], 0) for item in categories]
 
-    async def get_phone_number(self, ad_id: OfferID, token=None, use_proxy=None) -> str | None:
+    async def get_phone_number(self, ad_id: OfferID, token=None, use_proxy=None, response_only=None) -> str | dict | None:
         headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -551,12 +555,13 @@ class olxParser:
             headers['authorization'] = get_token()
 
         phones = []
-        # url = f'{self.__base_url}/api/v1/offers/{ad_id}/limited-phones/'
-        url = f'{self.__base_url}/api/v1/offers/{ad_id}/phones/'
+        url = f'{self.__base_url}/api/v1/offers/{ad_id}/limited-phones/'
 
         try:
             async with self._semaphore:
                 data = await self._make_request(url, headers, json_response=True, use_proxy=use_proxy)
+                if response_only:
+                    return data
 
                 if 'error' in data:
                     error = data.get('error')
@@ -578,6 +583,7 @@ class olxParser:
 
         except:
             logger.error(f"⚠️  Failed to get phone_numbers: {self.__api_offers_url}/{ad_id}")
+            raise
 
     async def process_cell(self, n, item, total, counter, lock, ws, wb, wb_path, save_every_n=10):
         """
@@ -611,26 +617,22 @@ class olxParser:
         if isinstance(has_phone, str) and has_phone == 'False':
             number_cell.value = 'не указан'
             number_cell.style = 'not_found_style'
-            print(f"{progress}  SKIPPED:  {DARK_GRAY}Не указан номер{WHITE}")
+            print(f"{progress}  SKIPPED:  {DARK_GRAY}Не указан номер{WHITE} · {url}")
             return
 
         if isinstance(has_phone, str) and has_phone in 'удален':
-            print(f"{progress}  SKIPPED:  {LIGHT_RED}Объявление удалено{WHITE}")
+            print(f"{progress}  SKIPPED:  {LIGHT_RED}Объявление удалено{WHITE} · {url}")
             return
 
         if isinstance(has_phone, str) and digits.isdigit():
-            print(f"{progress}  SKIPPED:  {LIGHT_GREEN}Номер уже получен{WHITE}")
+            print(f"{progress}  SKIPPED:  {LIGHT_GREEN}Номер уже получен{WHITE} · {url}")
             return
 
         if isinstance(has_phone, str) and has_phone in 'скрыт':
-            print(f"{progress}  SKIPPED:  {LIGHT_RED}Номер был скрыт{WHITE}")
+            print(f"{progress}  SKIPPED:  {LIGHT_RED}Номер был скрыт{WHITE} · {url}")
             return
 
-        try:
-            async with self._semaphore:
-                response = await self._make_request(f'{self.__api_offers_url}/{offer_id}/limited-phones/', json_response=True, use_proxy=True)
-        except:
-            raise
+        response = await self.get_phone_number(offer_id, use_proxy=True, response_only=True)
 
         if 'error' in response:
             error = response.get('error', {}).get('detail')
