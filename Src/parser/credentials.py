@@ -1,5 +1,6 @@
 import datetime
 import os
+import shutil
 import time
 
 import undetected_chromedriver as uc
@@ -16,7 +17,9 @@ def get_token(user_dir='guest', show_info=None) -> str | None:
     user_dir_existed = os.path.exists(user_dir)
 
     if not user_dir_existed:
-        print("ℹ️  Папка пользователя не найдена. Сейчас откроется браузер, вам нужно войти в свой аккаунт OLX в течении минуты и дождаться когда браузер закроется")
+        print(f"\n‼️  {LIGHT_YELLOW}Папка пользователя не найдена. Сейчас откроется браузер, вам нужно войти в свой аккаунт OLX в течении минуты и дождаться когда браузер закроется{WHITE}")
+        if os.path.exists(creds_file):
+            os.remove(creds_file)
         time.sleep(10)
 
     chrome_options = uc.ChromeOptions()
@@ -61,8 +64,17 @@ def get_token(user_dir='guest', show_info=None) -> str | None:
         driver.get('https://www.olx.ua/myaccount/')
 
         if not user_dir_existed:
-            logger.info(f"ℹ️  {driver.title}")
             time.sleep(60)
+            driver.close()
+            time.sleep(5)
+            title = driver.title
+
+            if title == 'OLX.UA - Увійти':
+                logger.error(f"❌  {RED}Не удалось получить токен. Попробуйтн снова. Возможно сработала капча или вы не успели войти в аккаунт{WHITE}")
+                shutil.rmtree(user_dir)
+                exit()
+            else:
+                logger.info(f"ℹ️  {title}")
 
         access_token = next((cookie['value'] for cookie in driver.get_cookies() if cookie['name'] == 'access_token'), None)
         token = f"Bearer {access_token}"

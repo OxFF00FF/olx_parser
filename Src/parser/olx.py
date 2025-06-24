@@ -167,9 +167,6 @@ class olxParser:
                 logger.info(f"Failed to get html: {e} · {url}")
             return {}
 
-    def update_token(self):
-        self._token = get_token()
-
     async def _pagination(self, category_url) -> int:
         logger.info(category_url)
 
@@ -554,7 +551,8 @@ class olxParser:
             headers['authorization'] = get_token()
 
         phones = []
-        url = f'{self.__base_url}/api/v1/offers/{ad_id}/limited-phones/'
+        # url = f'{self.__base_url}/api/v1/offers/{ad_id}/limited-phones/'
+        url = f'{self.__base_url}/api/v1/offers/{ad_id}/phones/'
 
         try:
             async with self._semaphore:
@@ -581,24 +579,34 @@ class olxParser:
         except:
             logger.error(f"⚠️  Failed to get phone_numbers: {self.__api_offers_url}/{ad_id}")
 
-    async def fetch_and_write_phone(self, n, item, total, ws, wb, wb_path, save_every_n):
+    async def process_cell(self, n, item, total, counter, lock, ws, wb, wb_path, save_every_n=10):
         """
+        Обрабатывает ячейку таблицы.
+        Получает ячейку с данными об объявлении, потом получает номер телефона с OLX, и записывает телефон обратно в ячейку
+
         :param n: Текущая итерация
         :param item: Данные объявления
         :param total: Общее количество обхявлений в файле
+        :param counter: Счетчик обраьотки ячеек
+        :param lock: Блокировака для обновления счеткика
         :param ws: Рабочий лист
         :param wb: Рабочая книга
         :param wb_path: Путь до файла
         :param save_every_n: Сохранение файла каждые x итераций
         :return:
         """
+        async with lock:
+            counter['value'] += 1
+            counter = counter['value']
+            remaining = total - counter
+            progress = f"[{LIGHT_YELLOW}{counter}{WHITE} / {LIGHT_BLUE}{total}{WHITE} | {LIGHT_MAGENTA}{remaining}{WHITE}]"
+
         offer_id = item[0]
         has_phone = item[2]
         url = item[10]
         row_idx = n + 2
         number_cell = ws.cell(row=row_idx, column=3)
         digits = ''.join(re.findall(r'\d+', has_phone))
-        progress = f"[{n} / {total}]"
 
         if isinstance(has_phone, str) and has_phone == 'False':
             number_cell.value = 'не указан'
@@ -687,15 +695,18 @@ class olxParser:
 
         # Получаем офферы из таблицы начиная со второй строки и до конца в виде списка
         offers_data = list(ws.iter_rows(min_row=2, values_only=True))
-        total_offers = len(offers_data)
-        save_every_n = 10
+        total = len(offers_data)
+        counter = {'value': 0}
+        lock = asyncio.Lock()
 
         tasks = [
-            self.fetch_and_write_phone(n, item, total_offers, ws, wb, wb_path, save_every_n)
+            self.process_cell(n, item, total, counter, lock, ws, wb, wb_path)
             for n, item
-            in enumerate(offers_data, start=1)
+            in enumerate(offers_data)
         ]
-        await asyncio.gather(*tasks)
+
+        for coro in asyncio.as_completed(tasks):
+            await coro
 
         with yaspin(text="Сохранение") as spinner:
             wb.save(wb_path)
