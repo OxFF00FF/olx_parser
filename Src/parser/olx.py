@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import time
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup as BS
 from openpyxl import load_workbook
@@ -14,9 +15,9 @@ from Src.app.colors import *
 from Src.app.config import app_config
 from Src.app.logging_config import logger
 from Src.parser.constants import limit
+from Src.parser.credentials import get_token
 from Src.parser.request import get_data
 from Src.parser.schemas import OfferID, Region, City, Category, OffersMeta, Offer
-from Src.parser.credentials import get_token
 from Src.parser.utils import open_json, format_date, save_json
 from Src.tables.olx import merge_city_offers, register_styles, save_offers, process_cell
 
@@ -163,7 +164,8 @@ class olxParser:
             logger.error("Объявление не найдено или удалено")
             return response if json_response else None
 
-        elif status == 400:
+        elif status in (400, 401):
+            logger.error(f"⚠️  Не Удалось получить ответ: {status} · {response}")
             return response
 
         elif status == 500:
@@ -177,9 +179,9 @@ class olxParser:
                 html = self._get_html(response)
                 tab_title = html.select_one('title').get_text()
                 if 'satisfied' in tab_title:
-                    logger.warning(f"⚠️  Request was rejected by CloudFront. {tab_title} · {url}")
+                    logger.error(f"⚠️  Request was rejected by CloudFront. {tab_title} · {url}")
                 else:
-                    logger.warning(f"⚠️  {tab_title} · {url}")
+                    logger.error(f"⚠️  {tab_title} · {url}")
             except Exception as e:
                 logger.error(f"⚠️  Failed parse html: {e} · {url}")
             return {}
@@ -224,6 +226,19 @@ class olxParser:
         if self._save_json:
             save_json(data, os.path.join(self.out_dir, f'{region_id}_{region_name}_{city_name}__categories.json'))
         return [Category(item['id'], None, item['count'], 0) for item in categories]
+
+    async def get_category_info(self, url) -> Category:
+        """
+        Получает ID и TITLE категории по URL (https://www.olx.ua/nedvizhimost/kvartiry/)
+        """
+        breadcrumb = urlparse(url).path.strip('/').replace('/', ',')
+        url = f"https://www.olx.ua/api/v1/friendly-links/query-params/{breadcrumb}"
+        data = await self._make_request(url, json_response=True)
+
+        category_id = data.get('data').get('category_id')
+        title = data.get('metadata').get('seo').get('title')
+
+        return Category(category_id, title, 0, 0)
 
     async def _get_offer_id(self, url: str) -> OfferID:
         """
@@ -607,7 +622,7 @@ class olxParser:
 
                 if 'error' in data:
                     error = data.get('error')
-                    if isinstance(error, str):
+                    if error == 'invalid_token':
                         logger.error(f"⛔  {data.get('error_description')}")
 
                         headers['authorization'] = get_token()
