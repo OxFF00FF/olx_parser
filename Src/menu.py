@@ -135,8 +135,8 @@ def choose_parsed_city():
         city_dir = next((c for c in parsed_cities if c.split('_')[-1] == choosed_city_id), None)
 
         os.system("cls")
-        print(f"\r✔️  Выбранный регион: {region_dir}")
-        print(f"\r✔️  Выбранынй город:  {city_dir}")
+        print(f"\r✔️  Выбранный регион: {LIGHT_YELLOW}{region_dir}{WHITE}")
+        print(f"\r✔️  Выбранынй город:  {LIGHT_YELLOW}{city_dir}{WHITE}")
 
         return [
             os.path.join(os.path.join(region_dir, city_dir), file)
