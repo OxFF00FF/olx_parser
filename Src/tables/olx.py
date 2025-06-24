@@ -277,6 +277,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     Обрабатывает ячейку таблицы.
     Получает ячейку с данными об объявлении, потом получает номер телефона с OLX, и записывает телефон обратно в ячейку
 
+    :param parser:
     :param n: Текущая итерация
     :param item: Данные объявления
     :param total: Общее количество обхявлений в файле
