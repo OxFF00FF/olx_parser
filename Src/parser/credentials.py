@@ -34,7 +34,7 @@ def get_token(user_dir='guest', show_info=None) -> str | None:
         # Проверяем есть ли файл с токеном
         if os.path.exists(creds_file):
             data = open_json(creds_file)
-            expire_ts = int(data.get('expires_in'))
+            expire_ts = int(data.get('timestamp'))
             now_ts = int(datetime.datetime.now().timestamp())
 
             if expire_ts and now_ts < expire_ts:
@@ -46,13 +46,14 @@ def get_token(user_dir='guest', show_info=None) -> str | None:
 
                 if show_info:
                     print(f"\n⌛️  Время действия токена: {LIGHT_MAGENTA}{formatted_time}{WHITE}")
+                    return
 
                 return data.get('token')
             else:
-                print(f"⚠️  {YELLOW}Время действия токена истекло{WHITE} · Получаем новый \n")
+                print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Получаем новый \n")
                 time.sleep(2)
         else:
-            print(f"⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый \n")
+            print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый \n")
             time.sleep(2)
 
         # Если файла нет илитоен истек, то создаем и запускаем драйвер
@@ -64,17 +65,16 @@ def get_token(user_dir='guest', show_info=None) -> str | None:
         driver.get('https://www.olx.ua/myaccount/')
 
         if not user_dir_existed:
+            driver.maximize_window()
             time.sleep(60)
-            driver.close()
-            time.sleep(5)
-            title = driver.title
 
-            if title == 'OLX.UA - Увійти':
-                logger.error(f"❌  {RED}Не удалось получить токен. Попробуйтн снова. Возможно сработала капча или вы не успели войти в аккаунт{WHITE}")
-                shutil.rmtree(user_dir)
-                exit()
-            else:
-                logger.info(f"ℹ️  {title}")
+        driver.minimize_window()
+        if driver.title == 'OLX.UA - Увійти':
+            logger.error(f"❌  {RED}Не удалось получить токен. Попробуйтн снова. Возможно сработала капча или вы не успели войти в аккаунт{WHITE}")
+            shutil.rmtree(user_dir)
+            exit()
+        else:
+            logger.info(f"ℹ️  {driver.title}")
 
         access_token = next((cookie['value'] for cookie in driver.get_cookies() if cookie['name'] == 'access_token'), None)
         token = f"Bearer {access_token}"
@@ -83,14 +83,16 @@ def get_token(user_dir='guest', show_info=None) -> str | None:
             print(f"⚠️  Не удалось получить токен · {access_token=}")
             return None
 
-        seconds = 900
+        seconds = 800
         minutes = seconds // 60
-        expire_time = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
-        expire_ts = int(expire_time.timestamp())
-        formatted_time = expire_time.strftime('%H:%M:%S')
+        expire_date = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+        expire_ts = int(expire_date.timestamp())
+        formatted_time = expire_date.strftime('%H:%M:%S')
 
-        save_json(dict(token=token, expires_in=expire_ts, expires_str=formatted_time), creds_file)
+        time.sleep(3)
+        save_json(dict(token=token, timestamp=expire_ts, time=formatted_time, date=str(expire_date)), creds_file)
         print(f"⌛️  {LIGHT_GREEN}Токен получен{WHITE} · Истекает через {LIGHT_YELLOW}{minutes} мин{WHITE} в {LIGHT_MAGENTA}{formatted_time}{WHITE}")
+        time.sleep(3)
 
         return token
 
