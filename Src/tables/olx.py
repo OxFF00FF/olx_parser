@@ -333,15 +333,15 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         elif 'Невозможно продолжить' in error:
             number_cell.value = 'Captcha'
 
-        print(f"{progress}  {LIGHT_RED}❌  {error}{WHITE} · {url}")
+        print(f"{progress}  ❌{LIGHT_RED}  {error}{WHITE} · {url}")
         if number_cell.value == 'скрыт':
             phone = await parser.get_phone_number(offer_id, use_proxy=True)
             if phone:
                 number_cell.value = phone
                 number_cell.style = 'active_style'
-                print(f"{progress}  {LIGHT_GREEN}✔️  Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
+                print(f"{progress}  ✔️  {LIGHT_GREEN}Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
             else:
-                print(f"{progress}  {RED}❌  Номер не получен: {WHITE}{phone} · {url}")
+                print(f"{progress}  ❌  {RED}Номер не получен: {WHITE}{phone} · {url}")
 
     else:
         phones = response.get('data', {}).get('phones', [])
@@ -350,9 +350,9 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         if phone:
             number_cell.value = phone
             number_cell.style = 'active_style'
-            print(f"{progress}  {LIGHT_GREEN}✔️  Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
+            print(f"{progress}  ✔️{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
         else:
-            print(f"{progress}  {RED}❌  Номер не получен: {WHITE}{phone} · {url}")
+            print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}{phone} · {url}")
 
     # Сохраняем прогресс каждые N итераций
     if (n + 1) % save_every_n == 0:

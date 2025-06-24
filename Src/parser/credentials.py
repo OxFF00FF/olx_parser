@@ -63,10 +63,10 @@ def get_token(user_dir='guest', show_info=None) -> str | None:
 
                 return data.get('token')
             else:
-                print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Получаем новый \n")
+                print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Получаем новый")
                 time.sleep(2)
         else:
-            print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый \n")
+            print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый")
             time.sleep(2)
 
         # Если файла нет илитоен истек, то создаем и запускаем драйвер
@@ -87,7 +87,7 @@ def get_token(user_dir='guest', show_info=None) -> str | None:
             shutil.rmtree(user_dir)
             exit()
         else:
-            logger.info(f"ℹ️  {driver.title}")
+            logger.info(f"✔️  {driver.title}")
 
         access_token = next((cookie['value'] for cookie in driver.get_cookies() if cookie['name'] == 'access_token'), None)
         token = f"Bearer {access_token}"
@@ -104,7 +104,7 @@ def get_token(user_dir='guest', show_info=None) -> str | None:
 
         time.sleep(3)
         save_json(dict(token=token, timestamp=expire_ts, time=formatted_time, date=str(expire_date)), creds_file)
-        print(f"⌛️  {LIGHT_GREEN}Токен получен{WHITE} · Истекает через {LIGHT_YELLOW}{minutes} мин{WHITE} в {LIGHT_MAGENTA}{formatted_time}{WHITE}")
+        print(f"\n⌛️  {LIGHT_GREEN}Токен получен{WHITE} · Истекает через {LIGHT_YELLOW}{minutes} мин{WHITE} в {LIGHT_MAGENTA}{formatted_time}{WHITE}")
         time.sleep(3)
 
         return token
