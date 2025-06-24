@@ -30,6 +30,14 @@ def save_html(html_text):
         file.write('<meta charset="utf-8">' + html_text)
 
 
+def save_json(content: list | dict | str, filepath: str = 'data.json'):
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(json.dumps(content, ensure_ascii=False, indent=4))
+
+    if app_config.DEBUG:
+        logger.debug(f"{GREEN}💾  Data saved to `{os.path.join(filepath)}`{WHITE}")
+
+
 def open_json(filepath: str = 'data.json'):
     if not os.path.exists(filepath):
         save_json({})
@@ -49,7 +57,8 @@ def read_proxies():
 
 def format_proxies():
     """
-    Форматируем прокси под нужный формат  <host>:<port>:<login>:<password> -> http://<login>:<password>:<host>:<port>
+    Форматируем прокси в нужный формат
+     - <host>:<port>:<login>:<password> -> http://<login>:<password>:<host>:<port>
     """
     result = ''
     files = os.listdir(os.path.dirname(os.path.dirname(os.path.dirname(os.path.join(__file__)))))
@@ -115,25 +124,18 @@ async def check_ip(proxy_url):
         logger.info(f"[PROXY {proxy_url.split('@')[-1]} -> {data.get('ip')} / {data.get('country', {}).get('name')} / {data.get('region')} / {data.get('city')}]")
 
 
-def save_json(content: list | dict | str, filepath: str = 'data.json'):
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(json.dumps(content, ensure_ascii=False, indent=4))
-
-    if app_config.DEBUG:
-        logger.debug(f"{GREEN}💾  Data saved to `{os.path.join(filepath)}`{WHITE}")
-
-
 def format_date(iso_date):
     dt = datetime.fromisoformat(iso_date)
     return dt.strftime("%d.%m.%Y в %H:%M:%S")
 
 
 def current_date():
+    """Возвращает текущую дату"""
     return datetime.now().strftime("%Y.%m.%d")
 
 
 def validate_filename(filename):
-    # Убираем запрещенные символы для названия файла
+    """Убирает запрещенные символы для названия файла"""
     return re.sub(r'[<>:"/\\|?*]', '-', filename)
 
 
@@ -177,6 +179,7 @@ def create_banner(words_and_colors, show=False):
 
 
 def clickable_file_link(filepath):
+    """Создает кликабельную ссылку в терминале для переданного пута до файла или папки"""
     uri_path = filepath.replace("\\", "/")
     uri = f"file:///{uri_path}"
 
