@@ -43,7 +43,7 @@ async def get_data(
         'cookies': cookies,
         'params': params,
         'timeout': 20,
-        'impersonate': 'chrome110',
+        'impersonate': 'chrome',
         'verify': False
         # 'allow_redirects': True
     }
@@ -79,12 +79,12 @@ async def get_data(
                     return status, response.text
 
         except DNSError:
-            logger.error(f'Не удалось выполнить запрос, проверьте подключение к интернету')
+            logger.error(f'🌐  Не удалось выполнить запрос, проверьте подключение к интернету')
             exit()
 
         except Exception as e:
             if app_config.DEBUG:
-                logger.warning(f"{attempt} Error: {proxy} · {type(e).__name__}. {e}")
+                logger.warning(f"⚠️  {attempt} Error: {proxy} · {type(e).__name__}. {e}")
 
             retries += 1
             if retries < max_retries:

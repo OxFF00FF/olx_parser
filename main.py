@@ -39,7 +39,7 @@ async def main():
 
         elif choice == '2':
             choosed_filename = choose_file()
-            await parser.parse_phones_from_file(choosed_filename)
+            await parser.parse_phones_from_file(choosed_filename, show_info=True)
 
         elif choice == '3':
             parsed_files = choose_parsed_city()

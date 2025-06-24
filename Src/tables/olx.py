@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 
@@ -269,3 +270,91 @@ def save_offers(content: list[Offer], region_id, region_name, city_id, city_name
 
     if save_xls:
         save_offers_excel(content, os.path.join(file_path, f'{filename}.xlsx'), show_info=False)
+
+
+async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_every_n=10):
+    """
+    Обрабатывает ячейку таблицы.
+    Получает ячейку с данными об объявлении, потом получает номер телефона с OLX, и записывает телефон обратно в ячейку
+
+    :param n: Текущая итерация
+    :param item: Данные объявления
+    :param total: Общее количество обхявлений в файле
+    :param counter: Счетчик обраьотки ячеек
+    :param ws: Рабочий лист
+    :param wb: Рабочая книга
+    :param wb_path: Путь до файла
+    :param save_every_n: Сохранение файла каждые x итераций
+    :return:
+    """
+    lock = asyncio.Lock()
+
+    async with lock:
+        counter['value'] += 1
+        counter = counter['value']
+        remaining = total - counter
+        progress = f"[{LIGHT_YELLOW}{counter}{WHITE} / {LIGHT_BLUE}{total}{WHITE} | {LIGHT_MAGENTA}{remaining}{WHITE}]"
+
+    offer_id = item[0]
+    has_phone = item[2]
+    url = item[10]
+    row_idx = n + 2
+    number_cell = ws.cell(row=row_idx, column=3)
+    digits = ''.join(re.findall(r'\d+', has_phone))
+
+    if isinstance(has_phone, str) and has_phone == 'False':
+        number_cell.value = 'не указан'
+        number_cell.style = 'not_found_style'
+        print(f"{progress}  SKIPPED:  {DARK_GRAY}Не указан номер{WHITE} · {url}")
+        return
+
+    if isinstance(has_phone, str) and has_phone in 'удален':
+        print(f"{progress}  SKIPPED:  {LIGHT_RED}Объявление удалено{WHITE} · {url}")
+        return
+
+    if isinstance(has_phone, str) and digits.isdigit():
+        print(f"{progress}  SKIPPED:  {LIGHT_GREEN}Номер уже получен{WHITE} · {url}")
+        return
+
+    if isinstance(has_phone, str) and has_phone in 'скрыт':
+        print(f"{progress}  SKIPPED:  {LIGHT_RED}Номер был скрыт{WHITE} · {url}")
+        return
+
+    response = await parser.get_phone_number(offer_id, use_proxy=True, response_only=True)
+
+    if 'error' in response:
+        error = response.get('error', {}).get('detail')
+        if error == 'Disallowed for this user':
+            number_cell.value = 'скрыт'
+            number_cell.style = 'not_instock_style'
+        elif error == 'Ad is not active':
+            number_cell.value = 'удален'
+            number_cell.style = 'removed_style'
+        elif 'Невозможно продолжить' in error:
+            number_cell.value = 'Captcha'
+
+        print(f"{progress}  {LIGHT_RED}❌  {error}{WHITE} · {url}")
+        if number_cell.value == 'скрыт':
+            phone = await parser.get_phone_number(offer_id, use_proxy=True)
+            if phone:
+                number_cell.value = phone
+                number_cell.style = 'active_style'
+                print(f"{progress}  {LIGHT_GREEN}✔️  Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
+            else:
+                print(f"{progress}  {RED}❌  Номер не получен: {WHITE}{phone} · {url}")
+
+    else:
+        phones = response.get('data', {}).get('phones', [])
+        phone = ' · '.join([str(p) for p in phones]) if phones else None
+
+        if phone:
+            number_cell.value = phone
+            number_cell.style = 'active_style'
+            print(f"{progress}  {LIGHT_GREEN}✔️  Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
+        else:
+            print(f"{progress}  {RED}❌  Номер не получен: {WHITE}{phone} · {url}")
+
+    # Сохраняем прогресс каждые N итераций
+    if (n + 1) % save_every_n == 0:
+        async with lock:
+            wb.save(wb_path)
