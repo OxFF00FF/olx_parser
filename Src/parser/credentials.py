@@ -11,6 +11,19 @@ from Src.parser.utils import save_json, open_json
 
 
 def get_token(user_dir='guest', show_info=None) -> str | None:
+    """
+    Получает токен доступа для OLX, используя указанный профиль браузера.
+
+    Если ранее сохранённый токен существует и ещё действителен — возвращает его.
+    В противном случае запускает браузер (в headless если папка профиля уже существует),
+    открывает страницу OLX для авторизации и извлекает токен из cookies.
+    Новый токен сохраняется в `credentials.json` с меткой времени окончания действия.
+
+    :param user_dir: Имя директории с пользовательским профилем Chrome (по умолчанию 'guest').
+    :param show_info: Если установлен, выводит информацию о времени действия токена, но не возвращает сам токен.
+
+    :return: Строка токена в формате "Bearer ..." или None, если получение не удалось.
+    """
     data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data')
     user_dir = os.path.join(data_dir, 'profiles', user_dir)
     creds_file = os.path.join(data_dir, 'credentials.json')
