@@ -35,7 +35,7 @@ def get_token(user_dir='guest', show_info=None) -> str | None:
         time.sleep(10)
 
     chrome_options = uc.ChromeOptions()
-    if user_dir_existed:
+    if user_dir_existed and os.path.exists(creds_file):
         chrome_options.add_argument("--headless")
 
     chrome_options.add_argument(f"--user-data-dir={user_dir}")
