@@ -112,7 +112,7 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info: bool = Tru
     try:
         wb.save(filepath)
         if show_info:
-            logger.info(f"💾  {LIGHT_GREEN}Файл сохранен в `{clickable_file_link(filepath)}` {WHITE}")
+            print(f"💾  {LIGHT_GREEN}Файл сохранен в `{clickable_file_link(filepath)}` {WHITE}")
     except PermissionError as e:
         logger.error(f"Не удалось сохранить EXCEL файл: {e}")
 
@@ -131,7 +131,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
     :param city_id: Идентификатор города.
     :param bar: Строка формата для отображения прогресс-бара (используется в tqdm).
     """
-    logger.info("🔄  Объединение таблиц")
+    print("🔄  Объединение таблиц")
     time.sleep(1)
 
     xlsx_path = os.path.join(data_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
@@ -174,7 +174,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
         for row in data_rows:
             output_ws.append(row)
 
-    logger.info("✅  Объединение завершено")
+    print("\r✅  Объединение завершено", end="", flush=True)
     time.sleep(1)
 
     with yaspin(text="Сохранение") as spinner:
@@ -182,7 +182,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
         spinner.text = 'Сохранено'
         spinner.ok('✔️')
 
-    logger.info("🔄  Форматирование строк")
+    print("🔄  Форматирование строк")
     total_rows = output_ws.max_row - 1
     for row in tqdm(output_ws.iter_rows(min_row=2, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", bar_format=bar, dynamic_ncols=True, leave=False, ascii=' ▱▰'):
         for col_idx, cell in enumerate(row, 1):
@@ -207,7 +207,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
     for col_idx, width in column_widths.items():
         output_ws.column_dimensions[get_column_letter(col_idx)].width = min(width, 100)
 
-    logger.info("✅  Форматирование завершено")
+    print("\r✅  Форматирование завершено", end="", flush=True)
     time.sleep(1)
 
     try:
@@ -216,7 +216,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
             spinner.text = 'Сохранено'
             spinner.ok('✔️')
 
-        logger.info(f"💾  {LIGHT_GREEN}Файл сохранен в `{clickable_file_link(save_path)}` {WHITE}")
+        print(f"💾  {LIGHT_GREEN}Файл сохранен в `{clickable_file_link(save_path)}` {WHITE}")
         time.sleep(1)
 
     except PermissionError as e:

@@ -81,6 +81,7 @@ async def choose_city(parser, region):
     if 0 <= choosed_idx < len(cities):
         choosed_city_id = cities[choosed_idx].id
 
+        os.system("cls")
         city = next((c for c in cities if c.id == choosed_city_id), None)
         print(f'ℹ️  Выбран город: {LIGHT_YELLOW}{city.name}{WHITE} ({city.id}) \n')
         return city
