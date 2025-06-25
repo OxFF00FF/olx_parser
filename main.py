@@ -1,7 +1,6 @@
 import asyncio
 import os
 import platform
-import time
 import traceback
 from time import perf_counter
 
@@ -52,22 +51,28 @@ async def main():
                 get_token(show_info=True)
                 print(f"{LIGHT_BLUE}[{n_file + 1} / {len(parsed_files)}]{WHITE}  {filename}")
                 await parser.parse_phones_from_file(filepath, show_info=False)
+                break
 
         else:
             print(f"❌  Такой опции нет: {LIGHT_RED}{choice}{WHITE} \n")
             exit()
 
     except Exception as e:
-        time.sleep(1)
         logger.error(f"🚫  Произошла неожиданная ошибка: {e}")
         logger.error(traceback.format_exc())
         print('\n[процесс завершил работу с кодом 1]')
-        input('Для выхода нажмите любую клавишу . . .')
+        input('Для выхода нажмите Enter . . .')
 
     finally:
         end = perf_counter() - start
+        print('\n')
         logger.info(f"[Finished in {end:.2f}s]")
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        input('\nВы звершили работу парсера. Для выхода нажмите Enter . . .')
+        exit()
+
