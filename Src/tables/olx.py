@@ -321,7 +321,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         print(f"{progress}  SKIPPED:  {LIGHT_RED}Номер был скрыт{WHITE} · {url}")
         return
 
-    response = await parser.get_phone_number(offer_id, use_proxy=True, response_only=True)
+    response = await parser.get_phone_number(offer_id, response_only=True)
 
     if 'error' in response:
         error = response.get('error', {}).get('detail')
@@ -336,7 +336,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
 
         print(f"{progress}  ❌{LIGHT_RED}  {error}{WHITE} · {offer_id} · {url}")
         if number_cell.value == 'скрыт':
-            phone = await parser.get_phone_number(offer_id, use_proxy=True)
+            phone = await parser.get_phone_number(offer_id)
             if phone:
                 number_cell.value = phone
                 number_cell.style = 'active_style'
