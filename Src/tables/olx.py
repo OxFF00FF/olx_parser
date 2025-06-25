@@ -334,7 +334,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         elif 'Невозможно продолжить' in error:
             number_cell.value = 'Captcha'
 
-        print(f"{progress}  ❌{LIGHT_RED}  {error}{WHITE} · {url}")
+        print(f"{progress}  ❌{LIGHT_RED}  {error}{WHITE} · {offer_id} · {url}")
         if number_cell.value == 'скрыт':
             phone = await parser.get_phone_number(offer_id, use_proxy=True)
             if phone:
