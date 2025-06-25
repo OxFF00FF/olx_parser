@@ -36,9 +36,9 @@ class City(BaseModel):
 
 class Category(BaseModel):
     id: int = Field(ge=1)
-    count: int = None
-    name: str = None
-    parent_id: int = None
+    count: int | None = None
+    name: str | None = None
+    parent_id: int | None = None
 
     def __init__(self, id: int, name: str | None, count: int, parent_id: int):
         super().__init__(id=id, name=name, count=count, parent_id=parent_id)
