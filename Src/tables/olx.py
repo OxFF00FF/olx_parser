@@ -261,7 +261,7 @@ def save_offers(content: list[Offer], region_id, region_name, city_id, city_name
     :param save_json: Флаг, указывающий, нужно ли сохранять данные в формате JSON.
     :param save_xls: Флаг, указывающий, нужно ли сохранять данные в формате XLSX.
     """
-    filename = validate_filename(f'{region_id}_{city_id}_{category_id}_{category_name}__offers')
+    filename = validate_filename(f'{region_id}_{city_id}_{category_id}_{category_name}__offers({len(content)})')
     file_path = os.path.join(out_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
     os.makedirs(file_path, exist_ok=True)
 
@@ -340,7 +340,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
             if phone:
                 number_cell.value = phone
                 number_cell.style = 'active_style'
-                print(f"{progress}  ✔️  {LIGHT_GREEN}Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
+                print(f"{progress}  ✔️  {GREEN}Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
             else:
                 print(f"{progress}  ❌  {RED}Номер не получен: {WHITE}{phone} · {url}")
 

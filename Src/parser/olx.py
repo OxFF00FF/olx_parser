@@ -165,7 +165,6 @@ class olxParser:
             return response if json_response else None
 
         elif status in (400, 401):
-            logger.error(f"⚠️  Не Удалось получить ответ: {status} · {response}")
             return response
 
         elif status == 500:
@@ -574,7 +573,7 @@ class olxParser:
             save_json(data, os.path.join(self.out_dir, f'{category_id}_{region_id}_{city_id}__offers_graphql.json'))
         return data.get('clientCompatibleListings', {}).get('data', {})
 
-    async def get_phone_number(self, ad_id: OfferID, token: str = None, use_proxy: bool = None, response_only: bool = None) -> str | dict | None:
+    async def get_phone_number(self, ad_id: OfferID, use_proxy: bool = True, response_only: bool = None) -> str | dict | None:
         """
         Асинхронно получает номера телефонов для объявления по его ID через API.
 
@@ -583,7 +582,6 @@ class olxParser:
         Если `response_only` установлен, возвращает полный JSON-ответ, иначе — объединённые номера телефонов в строку.
 
         :param ad_id: Идентификатор объявления.
-        :param token: Токен авторизации (если не указан, берётся из `get_token`).
         :param use_proxy: Флаг использования прокси для запроса.
         :param response_only: Если True — возвращает полный ответ API вместо строкового номера.
 
@@ -592,6 +590,7 @@ class olxParser:
         headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'authorization': await get_token(),
             'cache-control': 'no-cache',
             'pragma': 'no-cache',
             'priority': 'u=0, i',
@@ -606,11 +605,6 @@ class olxParser:
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
         }
 
-        if token:
-            headers['authorization'] = token
-        else:
-            headers['authorization'] = get_token()
-
         phones = []
         url = f'{self.__base_url}/api/v1/offers/{ad_id}/limited-phones/'
 
@@ -621,21 +615,20 @@ class olxParser:
                     return data
 
                 if 'error' in data:
-                    error = data.get('error')
-                    if error == 'invalid_token':
-                        logger.error(f"⛔  {data.get('error_description')}")
+                    error = data.get('error', {})
+                    error_detail = error.get('detail')
 
-                        headers['authorization'] = get_token()
-                        data2 = await self._make_request(url, headers, json_response=True, use_proxy=use_proxy)
-                        phones = data2.get('data', {}).get('phones', [])
-                    elif isinstance(error, dict):
-                        logger.error(f"⚠️  {data.get('error', {}).get('detail')}")
-                        return None
+                    if error == 'invalid_token' or error_detail == 'Disallowed for this user':
+                        headers['authorization'] = await get_token()
+                        data_2 = await self._make_request(url, headers, json_response=True, use_proxy=use_proxy)
+                        phones = data_2.get('data', {}).get('phones', [])
+
                     else:
-                        logger.error(error)
+                        logger.error(f"⛔  {data}")
 
                 else:
                     phones = data.get('data', {}).get('phones', [])
+
                 return ' · '.join([str(p) for p in phones]) if phones else None
 
         except:
@@ -717,8 +710,9 @@ class olxParser:
         :param region_id: (необязательно) Идентификатор региона для обработки.
         :param city_id: (необязательно) Идентификатор города для обработки.
         """
-        help_message = f"\n{'─' * 50}  {' ' * 72}| 📰  {BOLD}{LIGHT_MAGENTA}Найдено{RESET} / 📚  {BOLD}{LIGHT_CYAN}Страниц{RESET} / 📥  {BOLD}{RED}Собрано{RESET}{WHITE} / 📦  Всего собрано"
+        help_message = f"\n{'─' * 40}| 📰  {BOLD}{LIGHT_MAGENTA}Найдено{RESET} / 📚  {BOLD}{LIGHT_CYAN}Страниц{RESET} / 📥  {BOLD}{RED}Собрано{RESET}{WHITE} / 📦  Всего собрано |{'─' * 40}"
 
+        os.system('cls')
         logger.info('ℹ️  Начинается сбор объявлений для выбранного региона и города')
         time.sleep(1)
 
@@ -738,7 +732,7 @@ class olxParser:
             if n_region < indexes["region"]:
                 continue  # Пропускаем уже обработанные регионы
 
-            print(f"\n{LIGHT_BLUE}[{n_region + 1} / {len(regions)}]{WHITE} |  🆔  {region.id} · Регион:  {LIGHT_YELLOW}{region.name}{WHITE}")
+            print(f"\n{LIGHT_BLUE}[{n_region + 1} / {len(regions)}]{WHITE} |  Регион:  {LIGHT_YELLOW}{region.name.ljust(20)}{WHITE}  🆔  {region.id}")
 
             cities = await self.get_cities(region)
             if city_id is not None:
@@ -749,12 +743,15 @@ class olxParser:
                 if n_region == indexes["region"] and n_city < indexes["city"]:
                     continue  # Пропускаем уже обработанные города
 
-                print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  🆔  {city.id} · Город:  {LIGHT_YELLOW}{city.name}{WHITE}", end="")
+                print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  Город:   {LIGHT_YELLOW}{city.name.ljust(20)}{WHITE}  🆔  {city.id}", end="")
 
                 categories = await self.get_items_count_for_all_categories(region.id, city.id, region.name, city.name)
 
                 if not categories:
                     print(" | Объявлений не найдено")
+                    input(f"Нажмите {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска")
+                    os.execl(sys.executable, sys.executable, *sys.argv)
+                    exit()
                 else:
                     print(help_message)
                     for n_category, category in enumerate(categories):
@@ -777,9 +774,9 @@ class olxParser:
                               f"📦  {total_collected}")
                         save_json({"region": n_region, "city": n_city, "category": n_category + 1}, indexes_path)
 
-                    print(help_message)
+                    print(help_message.strip())
                     time.sleep(1)
-                    logger.info(f"✅  Сбор объявлений по всем категориям в {LIGHT_YELLOW}{region.name}{WHITE} города {LIGHT_YELLOW}{city.name}{WHITE} завершен")
+                    print(f"✅  Сбор объявлений по всем категориям в {LIGHT_YELLOW}{region.name}{WHITE} города {LIGHT_YELLOW}{city.name}{WHITE} завершен")
                     merge_city_offers(self.data_dir, region.name, region.id, city.name, city.id, self._bar)
 
                 break
@@ -790,12 +787,12 @@ class olxParser:
 
             break
 
-        logger.info(f"✅  Парсинг завершён. Всего собрано объявлений: {total_collected}")
+        print(f"✅  Парсинг завершён · Всего собрано объявлений: {BOLD}{total_collected}{RESET}{WHITE}")
         os.startfile(self.data_dir)
 
         print('\n[процесс завершил работу с кодом 0]')
         while True:
-            answer = input(f"Теперь вы можете закрыть этот терминал с помощью клавиши {UNDERLINED}Q{RESET}{WHITE}. Или нажмите клавишу {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска.")
+            answer = input(f"Теперь вы можете закрыть этот терминал с помощью клавиши {UNDERLINED}Q{RESET}{WHITE}. Или нажмите {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска")
             if answer.lower() == 'q' or answer.lower() == 'й':
                 break
             os.system("cls")
