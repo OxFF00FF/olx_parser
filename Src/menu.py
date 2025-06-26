@@ -1,7 +1,11 @@
 import os
+import sys
+import time
 
 from Src.app.colors import *
 from Src.app.logging_config import logger
+from Src.parser.authorization import get_session_id
+from Src.parser.credentials import get_auth_code, get_access_token
 from Src.parser.utils import create_banner
 
 
@@ -13,11 +17,22 @@ def banner():
 
 
 def main_menu():
-    print(f'╭───────  ГЛАВНОЕ МЕНЮ  ─────────╮ \n'
-          f'1.  {LIGHT_YELLOW}Собрать объявления {LIGHT_BLUE}региона{WHITE} \n'
-          f'2.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_CYAN}файла{WHITE} \n'
-          f'3.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_MAGENTA}города{WHITE} \n'
-          f'╰────────────────────────────────╯ \n')
+    sid = get_session_id()
+
+    if sid:
+        print(f'╭───────  ГЛАВНОЕ МЕНЮ  ─────────╮ \n'
+              f'1.  {LIGHT_YELLOW}Собрать объявления {LIGHT_BLUE}региона{WHITE} \n'
+              f'2.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_CYAN}файла{WHITE} \n'
+              f'3.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_MAGENTA}города{WHITE} \n'
+              f'    {LIGHT_GREEN}Сессия активна{WHITE} \n'
+              f'╰────────────────────────────────╯ \n')
+    else:
+        print(f'╭───────  ГЛАВНОЕ МЕНЮ  ─────────╮ \n'
+              f'1.  {LIGHT_YELLOW}Собрать объявления {LIGHT_BLUE}региона{WHITE} \n'
+              f'2.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_CYAN}файла{WHITE} \n'
+              f'3.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_MAGENTA}города{WHITE} \n'
+              f'4.  {LIGHT_YELLOW}Войти в аккаунт{WHITE} \n'
+              f'╰────────────────────────────────╯ \n')
 
 
 def regions_list(regions):
@@ -122,11 +137,12 @@ def choose_parsed_city():
 
     os.system("cls")
     parsed_cities = [name for name in os.listdir(os.path.join(data_dir, region_dir)) if os.path.isdir(os.path.join(data_dir, region_dir, name))]
-    print('\n╭────────  ПОЛУЧЕННЫЕ ГОРОДА  ──────╮ ')
+    print('\n╭──────────  ПОЛУЧЕННЫЕ ГОРОДА  ────────╮ ')
     for n, city in enumerate(parsed_cities):
         city_name, city_id = city.split('_')
-        print(f'{n + 1}.  {LIGHT_YELLOW}{city_name.ljust(20)}{WHITE}  🆔  {city_id}')
-    print(f'╰───────────────────────────────────╯ \n')
+        files_count = f"({str(len(os.listdir(os.path.join(data_dir, region_dir, city))))})"
+        print(f'{n + 1}.  {LIGHT_YELLOW}{city_name.ljust(20)}{WHITE} 🆔  {city_id} {files_count}')
+    print(f'╰───────────────────────────────────────╯ \n')
 
     choosed_city_num = input(f'{CYAN}▶️  Выберите город ({WHITE}{BOLD}1-{len(parsed_cities)}{RESET}{CYAN}): {WHITE}')
     choosed_idx = int(choosed_city_num) - 1
@@ -138,6 +154,7 @@ def choose_parsed_city():
         os.system("cls")
         print(f"\r✔️  Выбранный регион: {LIGHT_YELLOW}{region_dir}{WHITE}")
         print(f"\r✔️  Выбранынй город:  {LIGHT_YELLOW}{city_dir}{WHITE}")
+        time.sleep(2)
 
         return [
             os.path.join(os.path.join(region_dir, city_dir), file)
@@ -145,3 +162,18 @@ def choose_parsed_city():
             in os.listdir(os.path.join(data_dir, region_dir, city_dir))
             if file.endswith('xlsx')
         ]
+
+
+async def authorize():
+    sid = get_session_id()
+    if sid:
+        auth_code = get_auth_code(login_sid=sid)
+        await get_access_token(auth_code)
+        print("✔️  Вы успешно вошли в аккаунт")
+
+    else:
+        print(f"❌  Не удалось войти. Удалите файлы authorize.json, credentials.json в папке data, папку data/profiles/guest и повторите еще раз")
+
+    input(f"Нажмите {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска")
+    os.execl(sys.executable, sys.executable, *sys.argv)
+    exit()
