@@ -76,7 +76,7 @@ def get_session_id(user_dir='guest') -> str | None:
         else:
             session_id = open_json(auth_file).get('login_sid')
             if session_id:
-                print(f"✔️  {LIGHT_GREEN}Текущий SID{WHITE} · {session_id}\n")
+                print(f"✔️  {LIGHT_GREEN}Текущий SID{WHITE} · {session_id}")
                 return session_id
             else:
                 print(f"❌  Не удалось найти идентификатор сесии в файле · {auth_file}\n")
