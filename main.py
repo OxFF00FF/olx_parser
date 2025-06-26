@@ -6,7 +6,7 @@ from time import perf_counter
 
 from Src.app.colors import *
 from Src.app.logging_config import logger
-from Src.menu import banner, main_menu, choose_region, choose_city, choose_file, choose_parsed_city
+from Src.menu import banner, main_menu, choose_region, choose_city, choose_file, choose_parsed_city, authorize
 from Src.parser.credentials import get_token
 from Src.parser.olx import olxParser
 from Src.parser.utils import format_proxies
@@ -48,10 +48,12 @@ async def main():
                 if os.path.basename(filename).startswith('+'):
                     continue
 
-                get_token(show_info=True)
+                await get_token(show_info=True)
                 print(f"{LIGHT_BLUE}[{n_file + 1} / {len(parsed_files)}]{WHITE}  {filename}")
                 await parser.parse_phones_from_file(filepath, show_info=False)
-                break
+
+        elif choice == '4':
+            await authorize()
 
         else:
             print(f"❌  Такой опции нет: {LIGHT_RED}{choice}{WHITE} \n")
@@ -75,4 +77,3 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         input('\nВы звершили работу парсера. Для выхода нажмите Enter . . .')
         exit()
-
