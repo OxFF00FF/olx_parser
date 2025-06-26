@@ -121,7 +121,7 @@ async def update_token(refresh_token: str) -> str | None:
         logger.debug("✅  Acces token updated by refresh token")
         return response.get('access_token')
     else:
-        logger.error(f"⚠️  Failed to update token with provided refresh token · {response}")
+        logger.debug(f"⚠️  Failed to update token with provided refresh token")
         return None
 
 
@@ -185,10 +185,7 @@ async def get_token(user_dir='guest', show_info=None) -> str | None:
     user_dir_existed = os.path.exists(user_dir)
 
     if not user_dir_existed:
-        sid = get_session_id()
-        if sid:
-            auth_code = get_auth_code(login_sid=sid)
-            await get_access_token(auth_code)
+        await get_access_token(get_auth_code(login_sid=get_session_id()))
 
     if os.path.exists(creds_file):
         data = open_json(creds_file)
@@ -209,12 +206,12 @@ async def get_token(user_dir='guest', show_info=None) -> str | None:
 
         else:
             print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Обновляем")
-            refresh_token = data.get('refresh_token')
-            token = await update_token(refresh_token)
-
-        if token:
-            return f"Bearer {token}"
+            await update_token(data.get('refresh_token'))
+            token = await get_access_token(get_auth_code(login_sid=get_session_id()))
 
     else:
-        print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE}")
-        return
+        print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый")
+        token = await get_access_token(get_auth_code(login_sid=get_session_id()))
+
+    if token:
+        return f"Bearer {token}"

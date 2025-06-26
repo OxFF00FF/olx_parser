@@ -181,6 +181,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
         merged_wb.save(save_path)
         spinner.text = 'Сохранено'
         spinner.ok('✔️')
+        time.sleep(1)
 
     print("🔄  Форматирование строк")
     total_rows = output_ws.max_row - 1
@@ -215,6 +216,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
             merged_wb.save(save_path)
             spinner.text = 'Сохранено'
             spinner.ok('✔️')
+            time.sleep(1)
 
         print(f"💾  {LIGHT_GREEN}Файл сохранен в `{clickable_file_link(save_path)}` {WHITE}")
         time.sleep(1)
