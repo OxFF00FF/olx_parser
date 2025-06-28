@@ -19,11 +19,11 @@ async def main():
     start = perf_counter()
 
     try:
-        format_proxies()
-        banner()
-        main_menu()
-
         parser = olxParser(max_workers=10, Xlsx=True)
+
+        banner()
+        format_proxies()
+        main_menu()
 
         choice = input(f'{CYAN}▶️  Выберите действие ({WHITE}{BOLD}1/2/3{RESET}{CYAN}): {WHITE}')
         if choice == '1':

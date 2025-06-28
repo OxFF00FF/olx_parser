@@ -17,12 +17,12 @@ def get_session_id(user_dir='guest') -> str | None:
     """
     data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data')
     auth_file = os.path.join(data_dir, 'authorize.json')
-    user_dir_existed = os.path.exists(user_dir)
 
     chrome_dir = os.path.join(os.path.dirname(data_dir), 'chrome')
     user_dir = os.path.join(chrome_dir, 'profiles', user_dir)
     chrome_path = os.path.join(chrome_dir, 'chrome-win64', 'chrome.exe')
     driver_path = os.path.join(chrome_dir, 'driver-win64', 'chromedriver.exe')
+    user_dir_existed = os.path.exists(user_dir)
 
     if not user_dir_existed:
         print(f"\n‼️  {LIGHT_YELLOW}Папка пользователя не найдена{WHITE} · Сейчас откроется браузер, вам нужно войти в свой аккаунт OLX в течении минуты и дождаться когда браузер закроется")
@@ -51,7 +51,6 @@ def get_session_id(user_dir='guest') -> str | None:
             logger.info(f"⚙️  [{DARK_GRAY}Driver:  {BOLD}{driver_path}{RESET}{WHITE}]")
             logger.info(f"⚙️  [{DARK_GRAY}Version: {BOLD}{driver.capabilities.get('chrome', {}).get('chromedriverVersion')}{RESET}{WHITE}]")
             time.sleep(3)
-            exit()
 
             driver.get('https://www.olx.ua/uk/myaccount/settings')
 
