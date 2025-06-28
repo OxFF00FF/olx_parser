@@ -628,11 +628,11 @@ class olxParser:
                 else:
                     phones = data.get('data', {}).get('phones', [])
 
-                return ' · '.join([str(p) for p in phones]) if phones else None
+                return ' · '.join([str(p) for p in phones]) if phones else ''
 
         except:
             logger.error(f"⚠️  Failed to get phone_numbers: {self.__api_offers_url}/{ad_id}")
-            raise
+            return None
 
     async def parse_phones_from_file(self, filename, show_info=None):
         """

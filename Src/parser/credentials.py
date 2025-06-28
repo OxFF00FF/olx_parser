@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import os
@@ -10,6 +11,8 @@ from Src.app.logging_config import logger
 from Src.parser.authorization import get_session_id
 from Src.parser.request import get_data
 from Src.parser.utils import save_json, open_json
+
+lock = asyncio.Lock()
 
 
 def save_token(token_data: dict, updated=None):
@@ -185,7 +188,8 @@ async def get_token(user_dir='guest', show_info=None) -> str | None:
     user_dir_existed = os.path.exists(user_dir)
 
     if not user_dir_existed:
-        await get_access_token(get_auth_code(login_sid=get_session_id()))
+        async with lock:
+            await get_access_token(get_auth_code(login_sid=get_session_id()))
 
     if os.path.exists(creds_file):
         data = open_json(creds_file)
@@ -205,13 +209,15 @@ async def get_token(user_dir='guest', show_info=None) -> str | None:
                 return
 
         else:
-            print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Обновляем")
-            await update_token(data.get('refresh_token'))
-            token = await get_access_token(get_auth_code(login_sid=get_session_id()))
+            async with lock:
+                print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Обновляем")
+                await update_token(data.get('refresh_token'))
+                token = await get_access_token(get_auth_code(login_sid=get_session_id()))
 
     else:
-        print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый")
-        token = await get_access_token(get_auth_code(login_sid=get_session_id()))
+        async with lock:
+            print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый")
+            token = await get_access_token(get_auth_code(login_sid=get_session_id()))
 
     if token:
         return f"Bearer {token}"
