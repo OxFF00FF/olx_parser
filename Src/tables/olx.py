@@ -13,6 +13,8 @@ from Src.app.logging_config import logger
 from Src.parser.schemas import Offer
 from Src.parser.utils import validate_filename, clickable_file_link
 
+lock = asyncio.Lock()
+
 green_fill = PatternFill(start_color="47ff94", end_color="47ff94", fill_type="solid")
 orange_fill = PatternFill(start_color="ff6347", end_color="ff6347", fill_type="solid")
 lavender_fill = PatternFill(start_color="baa4fc", end_color="baa4fc", fill_type="solid")
@@ -290,36 +292,38 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     :param save_every_n: Сохранение файла каждые x итераций
     :return:
     """
-    lock = asyncio.Lock()
-
     async with lock:
         counter['value'] += 1
-        counter = counter['value']
-        remaining = total - counter
-        progress = f"[{LIGHT_YELLOW}{counter}{WHITE} / {LIGHT_BLUE}{total}{WHITE} | {LIGHT_MAGENTA}{remaining}{WHITE}]"
+        remaining = total - counter['value']
+        progress = f"[{LIGHT_YELLOW}{counter['value']}{WHITE} / {LIGHT_BLUE}{total}{WHITE} | {LIGHT_MAGENTA}{remaining}{WHITE}]"
 
     offer_id = item[0]
     has_phone = item[2]
     url = item[10]
     row_idx = n + 2
     number_cell = ws.cell(row=row_idx, column=3)
-    digits = ''.join(re.findall(r'\d+', has_phone))
+    digits = ''.join(re.findall(r'\d+', str(has_phone)))
 
-    if isinstance(has_phone, str) and has_phone == 'False':
+    if not number_cell.value:
+        number_cell.value = 'ошибка'
+        number_cell.style = 'not_found_style'
+        return
+
+    if number_cell.value == 'False':
         number_cell.value = 'не указан'
         number_cell.style = 'not_found_style'
         print(f"{progress}  SKIPPED:  {DARK_GRAY}Не указан номер{WHITE} · {url}")
         return
 
-    if isinstance(has_phone, str) and has_phone in 'удален':
+    if number_cell.value == 'удален':
         print(f"{progress}  SKIPPED:  {LIGHT_RED}Объявление удалено{WHITE} · {url}")
         return
 
-    if isinstance(has_phone, str) and digits.isdigit():
-        print(f"{progress}  SKIPPED:  {LIGHT_GREEN}Номер уже получен{WHITE} · {url}")
+    if digits.isdigit():
+        print(f"{progress}  SKIPPED:  {YELLOW}Номер уже получен{WHITE} · {url}")
         return
 
-    if isinstance(has_phone, str) and has_phone in 'скрыт':
+    if 'скрыт' in number_cell.value:
         print(f"{progress}  SKIPPED:  {LIGHT_RED}Номер был скрыт{WHITE} · {url}")
         return
 
@@ -344,7 +348,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
                 number_cell.style = 'active_style'
                 print(f"{progress}  ✔️  {GREEN}Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
             else:
-                print(f"{progress}  ❌  {RED}Номер не получен: {WHITE}{phone} · {url}")
+                print(f"{progress}  ❌  {RED}Номер не получен: {WHITE}Ошибка 1 · {url}")
 
     else:
         phones = response.get('data', {}).get('phones', [])
@@ -355,7 +359,16 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
             number_cell.style = 'active_style'
             print(f"{progress}  ✔️{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
         else:
-            print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}{phone} · {url}")
+            print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}Ошибка 2 · {url}")
+
+    if number_cell.value == 'True':
+        phone = await parser.get_phone_number(offer_id)
+        if phone:
+            number_cell.value = phone
+            number_cell.style = 'active_style'
+            print(f"{progress}  ✔️  {LIGHT_CYAN}Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
+        else:
+            print(f"{progress}  ❌  {RED}Номер не получен: {WHITE}Ошибка 3 · {url}")
 
     # Сохраняем прогресс каждые N итераций
     if (n + 1) % save_every_n == 0:

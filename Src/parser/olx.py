@@ -173,7 +173,6 @@ class olxParser:
                 raise RuntimeError("Неверные данные для авторизации прокси")
 
         else:
-            logger.error(f"⚠️  Unexpected status: {status} · {url}")
             try:
                 html = self._get_html(response)
                 tab_title = html.select_one('title').get_text()
@@ -181,8 +180,8 @@ class olxParser:
                     logger.error(f"⚠️  Request was rejected by CloudFront. {tab_title} · {url}")
                 else:
                     logger.error(f"⚠️  {tab_title} · {url}")
-            except Exception as e:
-                logger.error(f"⚠️  Failed parse html: {e} · {url}")
+            except:
+                logger.error(f"⚠️  Unexpected status: {status} · {url}")
             return {}
 
     async def get_categories(self) -> list[Category]:
@@ -668,9 +667,10 @@ class olxParser:
 
         # Получаем офферы из таблицы начиная со второй строки и до конца в виде списка
         offers_data = list(ws.iter_rows(min_row=2, values_only=True))
+        counter = {'value': 0}
 
         tasks = [
-            process_cell(self, n, item, len(offers_data), {'value': 0}, ws, wb, wb_path)
+            process_cell(self, n, item, len(offers_data), counter, ws, wb, wb_path)
             for n, item
             in enumerate(offers_data)
         ]

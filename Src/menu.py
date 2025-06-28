@@ -50,11 +50,11 @@ def cities_list(cities):
 
 
 def files_list():
-    print('\n╭─────────────  ФАЙЛЫ  ──────────────╮ ')
+    print('\n╭─────────────────  ФАЙЛЫ  ──────────────────╮ ')
     files = [f for f in os.listdir('Data') if f.endswith('xlsx')]
     for i, filename in enumerate(files, 1):
         print(f'{i}.  {LIGHT_YELLOW}{filename}{WHITE}')
-    print('╰─────────────────────────────────────╯ \n')
+    print('╰─────────────────────────────────────────────╯ \n')
     return files
 
 
