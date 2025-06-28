@@ -293,42 +293,47 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     :return:
     """
     async with lock:
+        # Формируем прогресс [текущий / всего / осталось]
         counter['value'] += 1
         remaining = total - counter['value']
-        progress = f"[{LIGHT_YELLOW}{counter['value']}{WHITE} / {LIGHT_BLUE}{total}{WHITE} | {LIGHT_MAGENTA}{remaining}{WHITE}]"
+        progress = f"[{LIGHT_YELLOW}{counter['value']}{WHITE} / {LIGHT_BLUE}{total}{WHITE} | {LIGHT_MAGENTA}{remaining}{WHITE}]".ljust(22)
 
     offer_id = item[0]
-    has_phone = item[2]
     url = item[10]
     row_idx = n + 2
     number_cell = ws.cell(row=row_idx, column=3)
-    digits = ''.join(re.findall(r'\d+', str(has_phone)))
+    digits = ''.join(re.findall(r'\d+', str(item[2])))
 
-    if not number_cell.value:
+    # Если номер не указан, удален или скрыт или номер уже получен, то пропускаем ячейку
+    if number_cell.value == 'False':
+        number_cell.value = 'не указан'
+        number_cell.style = 'not_found_style'
+        return
+
+    if number_cell.value == 'не указан':
+        return
+
+    if number_cell.value == 'удален':
+        return
+
+    if number_cell.value == 'скрыт':
+        return
+
+    if digits.isdigit():
+        return
+
+    # Пытаемся получить номер, если ответ пустая строка, пустой список или None, то пропускаем ячейку и ставим соответствующий статус
+    response = await parser.get_phone_number(offer_id, response_only=True)
+    if response == '' or not response.get('data', {}).get('phones', []):
+        number_cell.value = 'не указан'
+        number_cell.style = 'not_found_style'
+        return
+    if response is None:
         number_cell.value = 'ошибка'
         number_cell.style = 'not_found_style'
         return
 
-    if number_cell.value == 'False':
-        number_cell.value = 'не указан'
-        number_cell.style = 'not_found_style'
-        print(f"{progress}  SKIPPED:  {DARK_GRAY}Не указан номер{WHITE} · {url}")
-        return
-
-    if number_cell.value == 'удален':
-        print(f"{progress}  SKIPPED:  {LIGHT_RED}Объявление удалено{WHITE} · {url}")
-        return
-
-    if digits.isdigit():
-        print(f"{progress}  SKIPPED:  {YELLOW}Номер уже получен{WHITE} · {url}")
-        return
-
-    if 'скрыт' in number_cell.value:
-        print(f"{progress}  SKIPPED:  {LIGHT_RED}Номер был скрыт{WHITE} · {url}")
-        return
-
-    response = await parser.get_phone_number(offer_id, response_only=True)
-
+    # Если в ответе есть ошибка, то ставим соответствующий статус в ячейку
     if 'error' in response:
         error = response.get('error', {}).get('detail')
         if error == 'Disallowed for this user':
@@ -339,36 +344,44 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
             number_cell.style = 'removed_style'
         elif 'Невозможно продолжить' in error:
             number_cell.value = 'Captcha'
-
+            number_cell.style = 'not_found_style'
         print(f"{progress}  ❌{LIGHT_RED}  {error}{WHITE} · {offer_id} · {url}")
+
+        # Если номер был скрыт, то пытаемся его получить, если все успешно то добавляем его в ячейку
         if number_cell.value == 'скрыт':
             phone = await parser.get_phone_number(offer_id)
             if phone:
                 number_cell.value = phone
                 number_cell.style = 'active_style'
-                print(f"{progress}  ✔️  {GREEN}Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
+                print(f"{progress}  ✔️  {GREEN}Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
             else:
-                print(f"{progress}  ❌  {RED}Номер не получен: {WHITE}Ошибка 1 · {url}")
+                print(f"{progress}  ❌  {RED}Номер не получен: {WHITE} Ошибка 1 {phone} · {url}")
+                return
 
     else:
+        # Если ошибок нет, то значит номер есть в ответе, создаем строку из номеров и записываем в ячейку
         phones = response.get('data', {}).get('phones', [])
         phone = ' · '.join([str(p) for p in phones]) if phones else None
 
         if phone:
             number_cell.value = phone
             number_cell.style = 'active_style'
-            print(f"{progress}  ✔️{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
-        else:
-            print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}Ошибка 2 · {url}")
+            print(f"{progress}  ✔️{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
 
-    if number_cell.value == 'True':
+        else:
+            print(f"{progress}  ❌{RED}  Номер не указан: {WHITE} · {url}")
+            return
+
+    # Если во время получения номера произошла ошибка или капча, то пытаемся еще раз получить номер
+    if number_cell.value == 'True' or number_cell.value == 'Captcha':
         phone = await parser.get_phone_number(offer_id)
         if phone:
             number_cell.value = phone
             number_cell.style = 'active_style'
-            print(f"{progress}  ✔️  {LIGHT_CYAN}Номер получен: {LIGHT_YELLOW}{phone}{WHITE} · {url}")
+            print(f"{progress}  ✔️  {LIGHT_CYAN}Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
         else:
-            print(f"{progress}  ❌  {RED}Номер не получен: {WHITE}Ошибка 3 · {url}")
+            print(f"{progress}  ❌  {RED}Номер не получен: {WHITE} Ошибка 2 {phone} · {url}")
+            return
 
     # Сохраняем прогресс каждые N итераций
     if (n + 1) % save_every_n == 0:
