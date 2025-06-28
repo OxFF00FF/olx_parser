@@ -3,6 +3,8 @@ import os
 import time
 
 import undetected_chromedriver as uc
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service as ChromeService
 
 from Src.app.colors import *
 from Src.app.logging_config import logger
@@ -36,9 +38,12 @@ def get_session_id(user_dir='guest') -> str | None:
 
     try:
         if not os.path.exists(auth_file):
+            print(f"\n‼️  {LIGHT_YELLOW}Файл `authorize.json` не найден{WHITE} · Получаем новый Идентификатор сессии")
             logger.info(f"⚙️  {DARK_GRAY}[Profile: {user_dir}]{WHITE}")
+            time.sleep(5)
 
-            driver = uc.Chrome(options=chrome_options)
+            # driver = uc.Chrome(options=chrome_options)
+            driver = uc.Chrome(service=ChromeService(ChromeDriverManager().install()), options=chrome_options)
             driver.implicitly_wait(60)
 
             driver.get('https://www.olx.ua/uk/myaccount/settings')
