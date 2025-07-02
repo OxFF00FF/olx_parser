@@ -174,12 +174,15 @@ class olxParser:
 
         else:
             try:
+                offer_id = url.strip('/').split('/')[-2]
+                offer_url = f"https://www.olx.ua/{offer_id}"
+
                 html = self._get_html(response)
                 tab_title = html.select_one('title').get_text()
                 if 'satisfied' in tab_title:
-                    logger.error(f"⚠️  Request was rejected by CloudFront. {tab_title} · {url}")
+                    logger.error(f"⚠️  Request was rejected by CloudFront. {tab_title} · {offer_url}")
                 else:
-                    logger.error(f"⚠️  {tab_title} · {url}")
+                    logger.error(f"⚠️  {tab_title} · {offer_url}")
             except:
                 logger.error(f"⚠️  Unexpected status: {status} · {url}")
             return {}
@@ -589,7 +592,7 @@ class olxParser:
         headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-            'authorization': await get_token(),
+            'authorization': get_token(),
             'cache-control': 'no-cache',
             'pragma': 'no-cache',
             'priority': 'u=0, i',
@@ -618,7 +621,7 @@ class olxParser:
                     error_detail = error.get('detail')
 
                     if error == 'invalid_token' or error_detail == 'Disallowed for this user':
-                        headers['authorization'] = await get_token()
+                        headers['authorization'] = get_token()
                         data_2 = await self._make_request(url, headers, json_response=True, use_proxy=use_proxy)
                         phones = data_2.get('data', {}).get('phones', [])
 
