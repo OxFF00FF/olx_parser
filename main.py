@@ -48,7 +48,7 @@ async def main():
                 if os.path.basename(filename).startswith('+'):
                     continue
 
-                await get_token(show_info=True)
+                get_token(show_info=True)
                 print(f"{LIGHT_BLUE}[{n_file + 1} / {len(parsed_files)}]{WHITE}  {filename}")
                 await parser.parse_phones_from_file(filepath, show_info=False)
             print(f"✔️  Все файлы в обработаны")

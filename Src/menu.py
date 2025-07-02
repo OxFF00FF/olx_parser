@@ -168,7 +168,7 @@ async def authorize():
     sid = get_session_id()
     if sid:
         auth_code = get_auth_code(login_sid=sid)
-        await get_access_token(auth_code)
+        get_access_token(auth_code)
         print("✔️  Вы успешно вошли в аккаунт")
 
     else:

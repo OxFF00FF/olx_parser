@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 import json
 import os
@@ -9,10 +8,7 @@ from yarl import URL
 from Src.app.colors import *
 from Src.app.logging_config import logger
 from Src.parser.authorization import get_session_id
-from Src.parser.request import get_data
 from Src.parser.utils import save_json, open_json
-
-lock = asyncio.Lock()
 
 
 def save_token(token_data: dict, updated=None):
@@ -31,13 +27,13 @@ def save_token(token_data: dict, updated=None):
 
     action = 'обновлен' if updated else 'получен'
     print(f"\n⌛️  {LIGHT_GREEN}Токен {action}{WHITE} · Истекает через {LIGHT_YELLOW}{minutes} мин{WHITE} в {LIGHT_MAGENTA}{formatted_time}{WHITE}")
+
     creds_file = os.path.join(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data'), 'credentials.json')
     save_json(token_data, creds_file)
 
 
 def get_auth_code(login_sid: str) -> str | None:
     cookies = {'SID': login_sid}
-
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -55,7 +51,6 @@ def get_auth_code(login_sid: str) -> str | None:
         'upgrade-insecure-requests': '1',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
     }
-
     params = {
         'client_id': '309lsgh0deirlo2la9kmrmhe3v',
         'scope': 'openid profile email offline_access',
@@ -66,31 +61,37 @@ def get_auth_code(login_sid: str) -> str | None:
         'code_challenge': 'EG3uvQhW7QJdT6fQWtQyKLlaeb-_MXWCBSuvP1yh8fU',
         'code_challenge_method': 'S256',
     }
-
     url = str(URL('https://login.olx.ua/oauth2/authorize').with_query(params))
-    response = requests.get(url, headers=headers, cookies=cookies, impersonate='chrome')
-    status = response.status_code
 
-    if status == 200:
-        cookies = dict(response.cookies)
-        if 'SID' in cookies:
-            logger.debug(f"ℹ️  Account status: {cookies}")
-            match = re.search(r'authorizationResponse = (.*?);', string=response.text)
-            authotization_code = json.loads(match.group(1)).get('response', {}).get('code')
-            if not authotization_code:
-                print(f"❌  Не удалось получить код авторизации · {cookies=}")
-                return None
+    try:
+        response = requests.get(url, headers=headers, cookies=cookies, impersonate='chrome')
+        status = response.status_code
 
-            print(f"✔️  {LIGHT_GREEN}Код авторизации{WHITE} · {authotization_code}")
-            return authotization_code
+        if status == 200:
+            cookies = dict(response.cookies)
+            if 'SID' in cookies:
+                logger.debug(f"ℹ️  Account status: {cookies}")
+                match = re.search(r'authorizationResponse = (.*?);', string=response.text)
+                authotization_code = json.loads(match.group(1)).get('response', {}).get('code')
+
+                if not authotization_code:
+                    logger.error(f"⚠️  Не удалось найти код авторизации")
+                    return None
+
+                logger.debug(f"✔️  {LIGHT_GREEN}Код авторизации{WHITE} · {authotization_code}")
+                return authotization_code
+
+            else:
+                logger.error(f"⚠️  Accaunt unlogged: {cookies}")
+
         else:
-            logger.error(f"⚠️  Accaunt unlogged: {cookies}")
+            logger.error(f"⚠️  Failed to get authorization code · {status} {response.text}")
 
-    else:
-        logger.error(f"⚠️  Failed to get auth code · {status} {response.text}")
+    except Exception as e:
+        logger.error(f"⚠️  Failed to get authorization code · {e}")
 
 
-async def update_token(refresh_token: str) -> str | None:
+def update_token(refresh_token: str) -> str | None:
     headers = {
         'accept': '*/*',
         'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -108,7 +109,6 @@ async def update_token(refresh_token: str) -> str | None:
         'sec-fetch-site': 'same-site',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
     }
-
     payload = {
         'client_id': '309lsgh0deirlo2la9kmrmhe3v',
         'redirect_uri': 'https://www.olx.ua/d/callback/',
@@ -118,17 +118,24 @@ async def update_token(refresh_token: str) -> str | None:
         'refresh_token': refresh_token,
     }
 
-    status, response = await get_data('https://login.olx.ua/oauth2/token', headers, data=payload, Json=True)
-    if status == 200:
-        save_token(response, updated=True)
-        logger.debug("✅  Acces token updated by refresh token")
-        return response.get('access_token')
-    else:
-        logger.debug(f"⚠️  Failed to update token with provided refresh token")
-        return None
+    try:
+        response = requests.post('https://login.olx.ua/oauth2/token', headers=headers, data=payload, impersonate='chrome')
+        status = response.status_code
+        data = response.json()
+
+        if status == 200:
+            save_token(data, updated=True)
+            logger.debug("✅  Acces token updated by refresh token")
+            return data.get('access_token')
+        else:
+            logger.error(f"⚠️  Failed to update token with provided refresh token")
+            return None
+
+    except Exception as e:
+        logger.error(f"❌  Failed to update token · {e}")
 
 
-async def get_access_token(authorization_code: str) -> str | None:
+def get_access_token(authorization_code: str) -> str | None:
     headers = {
         'accept': '*/*',
         'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -138,15 +145,14 @@ async def get_access_token(authorization_code: str) -> str | None:
         'pragma': 'no-cache',
         'priority': 'u=1, i',
         'referer': 'https://www.olx.ua/',
-        'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
+        'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
         'sec-ch-ua-mobile': '?0',
         'sec-ch-ua-platform': '"Windows"',
         'sec-fetch-dest': 'empty',
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-site',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
     }
-
     payload = {
         'client_id': '309lsgh0deirlo2la9kmrmhe3v',
         'redirect_uri': 'https://www.olx.ua/d/callback/',
@@ -158,19 +164,22 @@ async def get_access_token(authorization_code: str) -> str | None:
     }
 
     try:
-        status, response = await get_data('https://login.olx.ua/oauth2/token', headers, data=payload, Json=True)
+        response = requests.post('https://login.olx.ua/oauth2/token', headers=headers, data=payload, impersonate='chrome')
+        status = response.status_code
+        data = response.json()
+
         if status == 200:
-            save_token(response)
+            save_token(data)
             logger.debug("✅  Access token recieved")
-            return response.get('access_token')
+            return data.get('access_token')
         else:
-            logger.error(f"⚠️  Failed to get acces token with providede auth_code · {response}")
+            logger.error(f"⚠️  Failed to get acces token with provided auth_code · {data}")
 
     except Exception as e:
-        logger.error(f"❌  Failed to get access token · {e}")
+        logger.error(f"⚠️  Failed to get access token · {e}")
 
 
-async def get_token(user_dir='guest', show_info=None) -> str | None:
+def get_token(user='guest', show_info=None) -> str | None:
     """
     Получает токен доступа для OLX, используя указанный профиль браузера.
 
@@ -184,12 +193,11 @@ async def get_token(user_dir='guest', show_info=None) -> str | None:
     """
     data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data')
     creds_file = os.path.join(data_dir, 'credentials.json')
-    user_dir = os.path.join(data_dir, 'profiles', user_dir)
+    user_dir = os.path.join(os.path.dirname(data_dir), 'chrome', 'profiles', user)
     user_dir_existed = os.path.exists(user_dir)
 
     if not user_dir_existed:
-        async with lock:
-            await get_access_token(get_auth_code(login_sid=get_session_id()))
+        get_access_token(get_auth_code(login_sid=get_session_id()))
 
     if os.path.exists(creds_file):
         data = open_json(creds_file)
@@ -209,15 +217,14 @@ async def get_token(user_dir='guest', show_info=None) -> str | None:
                 return
 
         else:
-            async with lock:
-                print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Обновляем")
-                await update_token(data.get('refresh_token'))
-                token = await get_access_token(get_auth_code(login_sid=get_session_id()))
+            print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Обновляем")
+            token = update_token(data.get('refresh_token'))
+            if not token:
+                token = get_access_token(get_auth_code(login_sid=get_session_id()))
 
     else:
-        async with lock:
-            print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый")
-            token = await get_access_token(get_auth_code(login_sid=get_session_id()))
+        print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый")
+        token = get_access_token(get_auth_code(login_sid=get_session_id()))
 
     if token:
         return f"Bearer {token}"
