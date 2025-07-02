@@ -626,7 +626,7 @@ class olxParser:
                         phones = data_2.get('data', {}).get('phones', [])
 
                     else:
-                        logger.error(f"⛔  {data}")
+                        logger.error(f"⛔  Failed to get phone_numbers: {data}")
 
                 else:
                     phones = data.get('data', {}).get('phones', [])

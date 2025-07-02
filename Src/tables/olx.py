@@ -295,8 +295,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     async with lock:
         # Формируем прогресс [текущий / всего / осталось]
         counter['value'] += 1
-        remaining = total - counter['value']
-        progress = f"[{LIGHT_YELLOW}{counter['value']}{WHITE} / {LIGHT_BLUE}{total}{WHITE} | {LIGHT_MAGENTA}{remaining}{WHITE}]".ljust(22)
+        progress = f"[{LIGHT_YELLOW}{counter['value']}{WHITE} / {LIGHT_BLUE}{total}{WHITE}]".ljust(20)
 
     offer_id = item[0]
     url = item[10]
@@ -308,6 +307,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     if number_cell.value == 'False':
         number_cell.value = 'не указан'
         number_cell.style = 'not_found_style'
+        print(f"{progress}  ℹ️  {DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
         return
 
     if number_cell.value == 'не указан':
@@ -328,6 +328,11 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         number_cell.style = 'not_found_style'
         print(f"{progress}  ❌{RED}  Ошибка: {response}{WHITE} · {url}")
         return
+    if response == {}:
+        number_cell.value = 'Captcha'
+        number_cell.style = 'removed_style'
+        print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}Captcha · {url}")
+        return
 
     # Если ответ получен и есть ошибка, то ставим соответствующий статус в ячейку
     if 'error' in response:
@@ -337,10 +342,10 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
             number_cell.style = 'not_instock_style'
         elif error == 'Ad is not active':
             number_cell.value = 'удален'
-            number_cell.style = 'removed_style'
+            number_cell.style = 'not_found_style'
         elif 'Невозможно продолжить' in error:
             number_cell.value = 'Captcha'
-            number_cell.style = 'not_found_style'
+            number_cell.style = 'removed_style'
             error = error.split('.')[0]
         print(f"{progress}  ❌{LIGHT_RED}  {error}{WHITE} · {offer_id} · {url}")
 
@@ -353,18 +358,16 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
                 print(f"{progress}  ✔️  {GREEN}Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
             else:
                 print(f"{progress}  ❌  {RED}Номер не получен: {WHITE} Ошибка 1 {phone=} · {url}")
-                return
 
     else:
         # Если ошибок нет, то получаем номер из ответа, создаем строку из номеров и записываем в ячейку
-        phones = response.get('data', {}).get('phones', [])
+        phones = response.get('data', {}).get('phones')
 
         if phones:
             phone = ' · '.join([str(p) for p in phones])
             number_cell.value = phone
             number_cell.style = 'active_style'
             print(f"{progress}  ✔️{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
-
         else:
             print(f"{progress}  ❌{DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
 
