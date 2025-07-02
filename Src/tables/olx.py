@@ -304,7 +304,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     number_cell = ws.cell(row=row_idx, column=3)
     digits = ''.join(re.findall(r'\d+', str(item[2])))
 
-    # Если номер не указан, удален или скрыт или номер уже получен, то пропускаем ячейку
+    # Если номер не указан, удален, скрыт или уже получен, то пропускаем ячейку
     if number_cell.value == 'False':
         number_cell.value = 'не указан'
         number_cell.style = 'not_found_style'
@@ -322,18 +322,14 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     if digits.isdigit():
         return
 
-    # Пытаемся получить номер, если ответ пустая строка, пустой список или None, то пропускаем ячейку и ставим соответствующий статус
     response = await parser.get_phone_number(offer_id, response_only=True)
-    if response == '' or not response.get('data', {}).get('phones', []):
-        number_cell.value = 'не указан'
-        number_cell.style = 'not_found_style'
-        return
     if response is None:
         number_cell.value = 'ошибка'
         number_cell.style = 'not_found_style'
+        print(f"{progress}  ❌{RED}  Ошибка: {response}{WHITE} · {url}")
         return
 
-    # Если в ответе есть ошибка, то ставим соответствующий статус в ячейку
+    # Если ответ получен и есть ошибка, то ставим соответствующий статус в ячейку
     if 'error' in response:
         error = response.get('error', {}).get('detail')
         if error == 'Disallowed for this user':
@@ -345,6 +341,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         elif 'Невозможно продолжить' in error:
             number_cell.value = 'Captcha'
             number_cell.style = 'not_found_style'
+            error = error.split('.')[0]
         print(f"{progress}  ❌{LIGHT_RED}  {error}{WHITE} · {offer_id} · {url}")
 
         # Если номер был скрыт, то пытаемся его получить, если все успешно то добавляем его в ячейку
@@ -355,22 +352,21 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
                 number_cell.style = 'active_style'
                 print(f"{progress}  ✔️  {GREEN}Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
             else:
-                print(f"{progress}  ❌  {RED}Номер не получен: {WHITE} Ошибка 1 {phone} · {url}")
+                print(f"{progress}  ❌  {RED}Номер не получен: {WHITE} Ошибка 1 {phone=} · {url}")
                 return
 
     else:
-        # Если ошибок нет, то значит номер есть в ответе, создаем строку из номеров и записываем в ячейку
+        # Если ошибок нет, то получаем номер из ответа, создаем строку из номеров и записываем в ячейку
         phones = response.get('data', {}).get('phones', [])
-        phone = ' · '.join([str(p) for p in phones]) if phones else None
 
-        if phone:
+        if phones:
+            phone = ' · '.join([str(p) for p in phones])
             number_cell.value = phone
             number_cell.style = 'active_style'
             print(f"{progress}  ✔️{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
 
         else:
-            print(f"{progress}  ❌{RED}  Номер не указан: {WHITE} · {url}")
-            return
+            print(f"{progress}  ❌{DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
 
     # Если во время получения номера произошла ошибка или капча, то пытаемся еще раз получить номер
     if number_cell.value == 'True' or number_cell.value == 'Captcha':
@@ -380,8 +376,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
             number_cell.style = 'active_style'
             print(f"{progress}  ✔️  {LIGHT_CYAN}Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
         else:
-            print(f"{progress}  ❌  {RED}Номер не получен: {WHITE} Ошибка 2 {phone} · {url}")
-            return
+            print(f"{progress}  ❌  {RED}Номер не получен: {WHITE} Ошибка 2 {phone=} · {url}")
 
     # Сохраняем прогресс каждые N итераций
     if (n + 1) % save_every_n == 0:
