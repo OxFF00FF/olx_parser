@@ -215,7 +215,7 @@ class olxParser:
 
         url = str(URL('https://www.olx.ua/api/v1/offers/metadata/search-categories/').with_query(params))
         response = await self._make_request(url, headers, json_response=True)
-        data = response.get('data', {}).get('categories')
+        data = response.get('data', {}).get('categories', [])
 
         if sorting_by == 'id':
             categories = sorted(data, key=lambda item: item.get('id', 0))

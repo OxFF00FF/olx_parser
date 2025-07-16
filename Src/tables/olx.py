@@ -307,7 +307,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     if number_cell.value == 'False':
         number_cell.value = 'не указан'
         number_cell.style = 'not_found_style'
-        print(f"{progress}  ℹ️  {DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
+        print(f"{progress}  ℹ️{DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
         return
 
     if number_cell.value == 'не указан':

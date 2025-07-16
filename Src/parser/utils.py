@@ -60,10 +60,13 @@ def format_proxies():
     Форматируем прокси в нужный формат
      - <host>:<port>:<login>:<password> -> http://<login>:<password>:<host>:<port>
     """
+    if os.path.exists('proxies.txt'):
+        return
+
     result = ''
     files = os.listdir(os.path.dirname(os.path.dirname(os.path.dirname(os.path.join(__file__)))))
 
-    not_format_proxies_file = next((f for f in files if f.startswith('Ukraine-resident-proxy')), None)
+    not_format_proxies_file = next((f for f in files if f.startswith('proxy')), '')
     if not not_format_proxies_file:
         raise ValueError('Не найден файл с прокси')
 
