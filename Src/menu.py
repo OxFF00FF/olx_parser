@@ -50,11 +50,11 @@ def cities_list(cities):
 
 
 def files_list():
-    print('\n╭─────────────────  ФАЙЛЫ  ──────────────────╮ ')
+    print('\n╭─────────────────────  ФАЙЛЫ  ──────────────────────╮ ')
     files = [f for f in os.listdir('Data') if f.endswith('xlsx')]
     for i, filename in enumerate(files, 1):
         print(f'{i}.  {LIGHT_YELLOW}{filename}{WHITE}')
-    print('╰─────────────────────────────────────────────╯ \n')
+    print('╰────────────────────────────────────────────────────╯ \n')
     return files
 
 
@@ -108,7 +108,7 @@ async def choose_city(parser, region):
 def choose_file():
     os.system("cls")
     files = files_list()
-    choosed_file_num = input(f'{CYAN}▶️  Выберите файл (1-{len(files)}): {WHITE}')
+    choosed_file_num = input(f'{CYAN}▶️  Выберите файл ({BOLD}{WHITE}1-{len(files)}{RESET}{CYAN}): {WHITE}')
 
     if not choosed_file_num.isdigit():
         print(f"❌  Нет такого файла: {LIGHT_RED}{choosed_file_num}{WHITE}")

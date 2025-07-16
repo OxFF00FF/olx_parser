@@ -148,7 +148,6 @@ class olxParser:
         """
         Делает запрос и проверяет статус ответа
         """
-        logger.debug(url)
         if not url:
             logger.error(f'⚠️  Не удалось получить ответ для URL · {url}')
             return None
@@ -696,10 +695,9 @@ class olxParser:
                 answer = input(f"Теперь вы можете закрыть этот терминал с помощью клавиши {UNDERLINED}Q{RESET}{WHITE}. Или нажмите клавишу {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска.")
                 if answer.lower() == 'q' or answer.lower() == 'й':
                     break
+                os.startfile(os.path.join(self.data_dir, os.path.dirname(wb_path)))
                 os.system("cls")
                 os.execl(sys.executable, sys.executable, *sys.argv)
-
-            os.startfile(os.path.join(self.data_dir, os.path.dirname(wb_path)))
 
     async def run(self, region_id=None, city_id=None):
         """
@@ -713,7 +711,7 @@ class olxParser:
         :param region_id: (необязательно) Идентификатор региона для обработки.
         :param city_id: (необязательно) Идентификатор города для обработки.
         """
-        help_message = f"\n{'─' * 40}| 📰  {BOLD}{LIGHT_MAGENTA}Найдено{RESET} / 📚  {BOLD}{LIGHT_CYAN}Страниц{RESET} / 📥  {BOLD}{RED}Собрано{RESET}{WHITE} / 📦  Всего собрано |{'─' * 40}"
+        help_message = f"\n{'─' * 30}| 📰  {BOLD}{LIGHT_MAGENTA}Найдено{RESET} / 📚  {BOLD}{LIGHT_CYAN}Страниц{RESET} / 📥  {BOLD}{RED}Собрано{RESET}{WHITE} / 📦  Всего собрано |{'─' * 30}"
 
         os.system('cls')
         logger.info('ℹ️  Начинается сбор объявлений для выбранного региона и города')
@@ -732,6 +730,7 @@ class olxParser:
             indexes["region"] = 0  # сбрасываем прогресс, чтобы начать с начала выбранного региона
 
         for n_region, region in enumerate(regions):
+            logger.debug(repr(region))
             if n_region < indexes["region"]:
                 continue  # Пропускаем уже обработанные регионы
 
@@ -743,6 +742,7 @@ class olxParser:
                 indexes["city"] = 0  # сбрасываем прогресс по городам, чтобы начать с начала выбранного города
 
             for n_city, city in enumerate(cities):
+                logger.debug(repr(city))
                 if n_region == indexes["region"] and n_city < indexes["city"]:
                     continue  # Пропускаем уже обработанные города
 
@@ -758,6 +758,7 @@ class olxParser:
                 else:
                     print(help_message)
                     for n_category, category in enumerate(categories):
+                        logger.debug(repr(category))
                         if n_region == indexes["region"] and n_city == indexes["city"] and n_category < indexes["category"]:
                             continue  # Пропускаем уже обработанные категории
 
@@ -770,7 +771,7 @@ class olxParser:
                         max_offers = offers_count.visible_total
 
                         total_collected += max_offers
-                        print(f"{LIGHT_BLUE}[{n_category + 1} / {len(categories)}]{WHITE} |   🆔  {category.id} · {YELLOW}{category_name[:100].ljust(100)}{WHITE} | "
+                        print(f"{LIGHT_BLUE}[{n_category + 1} / {len(categories)}]{WHITE} |   🆔  {category.id} · {YELLOW}{category_name[:80].ljust(80)}{WHITE} | "
                               f"📰  {BOLD}{LIGHT_MAGENTA}{offers_count.total}{RESET} / "
                               f"📚  {BOLD}{LIGHT_CYAN}{total_pages}{RESET}{WHITE} / "
                               f"📥  {BOLD}{RED}{max_offers}{RESET}{WHITE} / "
@@ -791,12 +792,12 @@ class olxParser:
             break
 
         print(f"✅  Парсинг завершён · Всего собрано объявлений: {BOLD}{total_collected}{RESET}{WHITE}")
-        os.startfile(self.data_dir)
 
         print('\n[процесс завершил работу с кодом 0]')
         while True:
             answer = input(f"Теперь вы можете закрыть этот терминал с помощью клавиши {UNDERLINED}Q{RESET}{WHITE}. Или нажмите {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска")
             if answer.lower() == 'q' or answer.lower() == 'й':
                 break
+            os.startfile(self.data_dir)
             os.system("cls")
             os.execl(sys.executable, sys.executable, *sys.argv)

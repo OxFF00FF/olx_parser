@@ -28,10 +28,22 @@ class Region(BaseModel):
     count: int = None
     url: str = None
 
+    def __repr__(self):
+        return f"Region(id={self.id}, name={self.name})"
+
+    def __str__(self):
+        return f"Region={self.id}, {self.name}"
+
 
 class City(BaseModel):
     id: int = Field(ge=1)
     name: str = None
+
+    def __repr__(self):
+        return f"City(id={self.id}, name={self.name})"
+
+    def __str__(self):
+        return f"City={self.id}, {self.name}"
 
 
 class Category(BaseModel):
@@ -44,10 +56,10 @@ class Category(BaseModel):
         super().__init__(id=id, name=name, count=count, parent_id=parent_id)
 
     def __repr__(self):
-        return f"Category(id={self.id}, name={self.name}, count={self.count}, parent_id={self.parent_id})"
+        return f"Category(id={self.id}, name={self.name})"
 
     def __str__(self):
-        return f"Category={self.id}, {self.name}, {self.count}"
+        return f"Category={self.id}, {self.name}"
 
 
 class Limit(BaseModel):
@@ -97,3 +109,9 @@ class Offer(BaseModel):
     price_str: str | None = None
     seller_city: str | None = None
     description: str | None = None
+
+    def __repr__(self):
+        return f"Offer(id={self.id}, title={self.title}, url={self.url})"
+
+    def __str__(self):
+        return f"Offer={self.id}, {self.title}, {self.url}"

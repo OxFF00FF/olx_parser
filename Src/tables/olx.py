@@ -75,6 +75,7 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info: bool = Tru
     column_widths = {i: len(headers[i - 1]) + 2 for i in range(1, len(headers) + 1)}
 
     for offer in content:
+        logger.debug(repr(offer))
         row = [
             offer.id,
             offer.title,
