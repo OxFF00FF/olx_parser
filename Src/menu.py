@@ -17,7 +17,7 @@ def banner():
 
 
 def main_menu():
-    token = get_token()
+    token = get_token(show_info=False)
     session = f'{LIGHT_GREEN}Сессия активна{WHITE}' if token else f'{RED}Необходима авторизация{WHITE}'
 
     if token:
@@ -74,7 +74,6 @@ async def choose_region(parser):
         exit(1)
 
     region = next((r for r in regions if r.id == int(choosed_region_id)), None)
-    print(f'ℹ️  Выбран регион: {LIGHT_YELLOW}{region.name}{WHITE} ({region.id}) \n')
     return region
 
 
@@ -99,7 +98,6 @@ async def choose_city(parser, region):
 
         os.system("cls")
         city = next((c for c in cities if c.id == choosed_city_id), None)
-        print(f'ℹ️  Выбран город: {LIGHT_YELLOW}{city.name}{WHITE} ({city.id}) \n')
         return city
     else:
         print(f"{RED}❌  Неверный номер города{WHITE} \n")
