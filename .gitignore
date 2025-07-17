@@ -6,4 +6,5 @@ logs
 tests
 .env
 proxies.txt
+proxy.txt
 *.bak
