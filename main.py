@@ -1,6 +1,7 @@
 import asyncio
 import os
 import platform
+import sys
 import traceback
 from time import perf_counter
 
@@ -48,7 +49,7 @@ async def main():
                 if os.path.basename(filename).startswith('+'):
                     continue
 
-                get_token(show_info=True)
+                get_token(exp_time_only=True, show_info=False)
                 print(f"{LIGHT_BLUE}[{n_file + 1} / {len(parsed_files)}]{WHITE}  {filename}")
                 await parser.parse_phones_from_file(filepath, show_info=False)
             print(f"✔️  Все файлы в обработаны")
@@ -58,7 +59,8 @@ async def main():
 
         else:
             print(f"❌  Такой опции нет: {LIGHT_RED}{choice}{WHITE} \n")
-            exit()
+            input('\nДля Перезапуска нажмите Enter . . .')
+            os.execl(sys.executable, sys.executable, *sys.argv)
 
     except Exception as e:
         logger.error(f"🚫  Произошла неожиданная ошибка: {e}")
@@ -76,5 +78,5 @@ if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        input('\nВы звершили работу парсера. Для выхода нажмите Enter . . .')
-        exit()
+        input('\nВы звершили работу парсера. Для Перезапуска нажмите Enter . . .')
+        os.execl(sys.executable, sys.executable, *sys.argv)
