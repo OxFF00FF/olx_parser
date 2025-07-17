@@ -64,7 +64,7 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info: bool = Tru
     else:
         wb = Workbook()
         ws = wb.active
-        ws.title = "Товары"
+        ws.title = "Объявления"
         ws.append(headers)
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col_num)
@@ -74,8 +74,17 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info: bool = Tru
     # Словарь для расчета ширины колонок
     column_widths = {i: len(headers[i - 1]) + 2 for i in range(1, len(headers) + 1)}
 
+    unique_offers_by_id = []
+    seen_ids = set()
+
     for offer in content:
-        logger.debug(repr(offer))
+        if offer.id not in seen_ids:
+            unique_offers_by_id.append(offer)
+            seen_ids.add(offer.id)
+
+    for offer in unique_offers_by_id:
+        logger.debug(f"📦  {repr(offer)}")
+
         row = [
             offer.id,
             offer.title,
@@ -145,6 +154,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
     output_ws.title = f"{region_name} · {city_name}"
     header_written = False
     column_widths = {}
+    seen_ids = set()
 
     xlsx_files = [f for f in os.listdir(xlsx_path) if f.endswith('xlsx')]
 
@@ -175,6 +185,10 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
             data_rows = rows[1:]
 
         for row in data_rows:
+            offer_id = row[0]
+            if offer_id in seen_ids:
+                continue
+            seen_ids.add(offer_id)
             output_ws.append(row)
 
     print("\r✅  Объединение завершено", end="", flush=True)
@@ -185,8 +199,8 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
         spinner.text = 'Сохранено'
         spinner.ok('✔️')
         time.sleep(1)
-
     print("🔄  Форматирование строк")
+
     total_rows = output_ws.max_row - 1
     for row in tqdm(output_ws.iter_rows(min_row=2, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", bar_format=bar, dynamic_ncols=True, leave=False, ascii=' ▱▰'):
         for col_idx, cell in enumerate(row, 1):
