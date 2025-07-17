@@ -18,7 +18,7 @@ from Src.parser.constants import limit
 from Src.parser.credentials import get_token
 from Src.parser.request import get_data
 from Src.parser.schemas import OfferID, Region, City, Category, OffersMeta, Offer
-from Src.parser.utils import open_json, format_date, save_json
+from Src.parser.utils import open_json, format_date, save_json, get_proxy_random
 from Src.tables.olx import merge_city_offers, register_styles, save_offers, process_cell
 
 
@@ -144,47 +144,58 @@ class olxParser:
             data = json.loads(json.loads(match.group(1)))
             return data.get('listing', {}).get('listing', {}).get('totalPages', 0)
 
-    async def _make_request(self, url: str, headers: dict = None, data: dict = None, payload: dict = None, json_response: bool = None, use_proxy: bool = False) -> str | dict | None:
+    async def _make_request(self, url: str, headers: dict = None, data: dict = None, payload: dict = None, json_response: bool = None, use_proxy: bool = None) -> str | dict | None:
         """
         Делает запрос и проверяет статус ответа
         """
-        if not url:
-            logger.error(f'⚠️  Не удалось получить ответ для URL · {url}')
-            return None
-
         headers = headers or self._get_headers()
         cookies = self._get_cookies()
 
-        status, response = await get_data(url, headers, cookies, data, payload, Json=json_response, use_proxy=use_proxy)
-        if status == 200:
-            return response
+        attempt, retries, delay = 0, 5, 5
+        for _ in range(5):
+            proxy = get_proxy_random()
+            status, response = await get_data(url, headers, cookies, data, payload, proxy=proxy, Json=json_response, use_proxy=use_proxy)
 
-        elif status == 404:
-            logger.error("Объявление не найдено или удалено")
-            return response if json_response else None
+            if status == 200:
+                attempt += 1
+                logger.debug(f"✔️  [{attempt}/{retries}] Request success. Status:{LIGHT_GREEN}{status}{WHITE}")
+                return response
 
-        elif status in (400, 401):
-            return response
+            elif status == 404:
+                attempt += 1
+                logger.debug(f"⚠️  [{attempt}/{retries}] Объявление не найдено или удалено. Status: {MAGENTA}{status}{WHITE}")
+                return response if json_response else None
 
-        elif status == 500:
-            logger.error(f'⚠️  Не удалось выполнить запрос: {status} · {response}')
-            if '407' in response:
-                raise RuntimeError("Неверные данные для авторизации прокси")
+            elif status in (400, 401):
+                attempt += 1
+                logger.debug(f"⚠️  [{attempt}/{retries}] Captcha. Status: {YELLOW}{status}{WHITE}")
+                await asyncio.sleep(delay)
 
-        else:
-            try:
-                offer_id = url.strip('/').split('/')[-2]
-                offer_url = f"https://www.olx.ua/{offer_id}"
+            elif status == 500:
+                attempt += 1
+                if attempt == 5:
+                    logger.error(f"⚠️  [{attempt}/{retries}] Не удалсоь выполнить запрос. Status: {RED}{status}{WHITE} · {response.split('See')[0]}")
+                if '407' in response:
+                    raise RuntimeError("Неверные данные для авторизации прокси")
+                await asyncio.sleep(delay)
 
-                html = self._get_html(response)
-                tab_title = html.select_one('title').get_text()
-                if 'satisfied' in tab_title:
-                    logger.error(f"⚠️  Request was rejected by CloudFront. {tab_title} · {offer_url}")
-                else:
-                    logger.error(f"⚠️  {tab_title} · {offer_url}")
-            except:
-                logger.error(f"⚠️  Unexpected status: {status} · {url}")
-            return {}
+            else:
+                attempt += 1
+                try:
+                    offer_id = url.strip('/').split('/')[-2]
+                    offer_url = f"https://www.olx.ua/{offer_id}"
+
+                    html = self._get_html(response)
+                    tab_title = html.select_one('title').get_text()
+                    if 'satisfied' in tab_title:
+                        logger.debug(f"⚠️  Запрос был отклонен CloudFront. {tab_title} · {offer_url}")
+                    else:
+                        logger.error(f"⚠️  {tab_title} · {offer_url}")
+                except:
+                    logger.error(f"⚠️  Unexpected status: {status} · {url}")
+                await asyncio.sleep(delay)
+
+        return {}
 
     async def get_categories(self) -> list[Category]:
         """
@@ -574,7 +585,7 @@ class olxParser:
             save_json(data, os.path.join(self.out_dir, f'{category_id}_{region_id}_{city_id}__offers_graphql.json'))
         return data.get('clientCompatibleListings', {}).get('data', {})
 
-    async def get_phone_number(self, ad_id: OfferID, use_proxy: bool = True, response_only: bool = None) -> str | dict | None:
+    async def get_phone_number(self, ad_id: OfferID, use_proxy: bool = None, response_only: bool = None) -> str | dict | None:
         """
         Асинхронно получает номера телефонов для объявления по его ID через API.
 
@@ -625,7 +636,7 @@ class olxParser:
                         phones = data_2.get('data', {}).get('phones', [])
 
                     else:
-                        logger.error(f"⛔  Failed to get phone_numbers: {data}")
+                        logger.debug(f"⛔  Failed to get phone_numbers: {data}")
 
                 else:
                     phones = data.get('data', {}).get('phones', [])
@@ -633,7 +644,7 @@ class olxParser:
                 return ' · '.join([str(p) for p in phones]) if phones else ''
 
         except:
-            logger.error(f"⚠️  Failed to get phone_numbers: {self.__api_offers_url}/{ad_id}")
+            logger.debug(f"⚠️  Failed to get phone_numbers: {self.__api_offers_url}/{ad_id}")
             return None
 
     async def parse_phones_from_file(self, filename, show_info=None):
@@ -650,8 +661,10 @@ class olxParser:
         if show_info:
             logger.info('🔄  Начинается сбор номеров из файла')
             if app_config.USE_PROXY:
-                logger.info("ℹ️  Использование прокси включено")
-            time.sleep(1)
+                logger.info(f"🟢  Использование прокси {LIGHT_GREEN}ВКЛЮЧЕНО{WHITE}")
+            else:
+                logger.info(f"🔴  Использование прокси {LIGHT_RED}ОТКЛЮЧЕНО{WHITE}")
+            time.sleep(3)
 
         # Путь до merged таблицы
         wb_path = os.path.join(self.data_dir, filename)
