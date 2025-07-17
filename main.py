@@ -73,6 +73,14 @@ async def main():
         print('\n')
         logger.info(f"[Finished in {end:.2f}s]")
 
+        print('\n[процесс завершил работу с кодом 0]')
+        while True:
+            answer = input(f"Теперь вы можете закрыть этот терминал с помощью клавиши {UNDERLINED}Q{RESET}{WHITE}. Или нажмите клавишу {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска.")
+            if answer.lower() == 'q' or answer.lower() == 'й':
+                break
+            os.system("cls")
+            os.execl(sys.executable, sys.executable, *sys.argv)
+
 
 if __name__ == '__main__':
     try:

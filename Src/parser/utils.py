@@ -33,9 +33,7 @@ def save_html(html_text):
 def save_json(content: list | dict | str, filepath: str = 'data.json'):
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(json.dumps(content, ensure_ascii=False, indent=4))
-
-    if app_config.DEBUG:
-        logger.debug(f"{GREEN}💾  Data saved to `{os.path.join(filepath)}`{WHITE}")
+    logger.debug(f"{GREEN}💾  Data saved to `{os.path.join(filepath)}`{WHITE}")
 
 
 def open_json(filepath: str = 'data.json'):

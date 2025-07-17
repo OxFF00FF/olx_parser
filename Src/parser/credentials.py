@@ -214,10 +214,7 @@ def get_token(user='guest', exp_time_only=None, show_info=True) -> str | None:
             token = data.get('access_token')
             if exp_time_only:
                 print(f"\n⌛️  Время действия токена: {LIGHT_MAGENTA}{formatted_time}{WHITE}")
-                return
-            else:
                 return token
-
         else:
             if show_info:
                 print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Обновляем")

@@ -131,7 +131,7 @@ class olxParser:
 
         return offer
 
-    async def _make_request(self, url: str, headers: dict = None, data: dict = None, payload: dict = None, json_response: bool = None, use_proxy: bool = None) -> str | dict | None:
+    async def _make_request(self, url: str, headers: dict = None, data: dict = None, payload: dict = None, json_response: bool = None, use_proxy: bool = False) -> str | dict | None:
         """
         Делает запрос и проверяет статус ответа
         """
@@ -189,7 +189,7 @@ class olxParser:
         """Возвраащет пагинацию для передавнной ссылки на категорию"""
         logger.info(category_url)
 
-        response = await self._make_request(category_url, use_proxy=False)
+        response = await self._make_request(category_url)
 
         html = self._get_html(response)
 
@@ -227,7 +227,7 @@ class olxParser:
             params['city_id'] = city_id
 
         url = str(URL('https://www.olx.ua/api/v1/offers/metadata/search/').with_query(params))
-        response = await self._make_request(url, headers, json_response=True, use_proxy=False)
+        response = await self._make_request(url, headers, json_response=True)
         data = response.get('data', {})
 
         regions = [
@@ -255,7 +255,7 @@ class olxParser:
         }
 
         url = str(URL('https://www.olx.ua/api/v1/targeting/data/').with_query(params))
-        response = await self._make_request(url, json_response=True, use_proxy=False)
+        response = await self._make_request(url, json_response=True)
         targeting = response.get('data', {}).get('targeting', [])
         return ' > '.join([v for k, v in targeting.items() if 'name' in k])
 
@@ -267,7 +267,7 @@ class olxParser:
         :param url: Ссылка
         :return: Возвращает ID Объявления
         """
-        response = await self._make_request(url, use_proxy=False)
+        response = await self._make_request(url)
 
         html = self._get_html(response)
         script_text = next((item.get_text(strip=True) for item in html.find_all('script') if '@type' in item.text), None)
@@ -306,7 +306,7 @@ class olxParser:
             params['city_id'] = city_id
 
         url = str(URL(self.__api_offers_url).with_query(params))
-        response = await self._make_request(url, json_response=True, use_proxy=False)
+        response = await self._make_request(url, json_response=True)
         offers = response.get('data')
 
         next_page = response.get('links', {}).get('next', {}).get('href')
@@ -386,7 +386,7 @@ class olxParser:
             params['city_id'] = city_id
 
         url = str(URL('https://www.olx.ua/api/v1/offers/metadata/search-categories/').with_query(params))
-        response = await self._make_request(url, headers, json_response=True, use_proxy=False)
+        response = await self._make_request(url, headers, json_response=True)
         data = response.get('data', {}).get('categories', [])
 
         if sorting_by == 'id':
@@ -410,7 +410,7 @@ class olxParser:
             'query': 'query InventoryMetadata {\n  categories {\n    id\n    name\n    parent_id\n  }\n}',
         }
         url = 'https://production-graphql.eu-sharedservices.olxcdn.com/graphql'
-        response = await self._make_request(url, payload=payload, json_response=True, use_proxy=False)
+        response = await self._make_request(url, payload=payload, json_response=True)
         data = response.get('data').get('categories')
         return [Category(item.get('id'), item.get('name'), 0, item.get('parent_id')) for item in data]
 
@@ -420,7 +420,7 @@ class olxParser:
         """
         breadcrumb = urlparse(url).path.strip('/').replace('/', ',')
         url = f"https://www.olx.ua/api/v1/friendly-links/query-params/{breadcrumb}"
-        data = await self._make_request(url, json_response=True, use_proxy=False)
+        data = await self._make_request(url, json_response=True)
 
         category_id = data.get('data').get('category_id')
         title = data.get('metadata').get('seo').get('title')
@@ -435,7 +435,7 @@ class olxParser:
         """
         url = 'https://www.olx.ua/api/v1/geo-encoder/regions/'
 
-        response = await self._make_request(url, json_response=True, use_proxy=False)
+        response = await self._make_request(url, json_response=True)
         data = response.get('data', [])
 
         if sorting_by == 'id':
@@ -458,7 +458,7 @@ class olxParser:
         """
         url = f'https://www.olx.ua/api/v1/geo-encoder/regions/{region.id}/cities/?limit=5000'
 
-        response = await self._make_request(url, json_response=True, use_proxy=False)
+        response = await self._make_request(url, json_response=True)
         data = response.get('data')
 
         if sorting_by == 'id':
@@ -535,7 +535,7 @@ class olxParser:
         }
 
         url = 'https://www.olx.ua/apigateway/graphql'
-        response = await self._make_request(url, payload=payload, json_response=True, use_proxy=False)
+        response = await self._make_request(url, payload=payload, json_response=True)
         data = response.get('data', {})
 
         if self._save_json:
@@ -583,7 +583,7 @@ class olxParser:
 
         total_pages = await self._pagination(category_url)
         tasks = [
-            self._make_request(f'{category_url}/?page={page + 1}', use_proxy=False)
+            self._make_request(f'{category_url}/?page={page + 1}')
             for page
             in range(total_pages)
         ]
@@ -632,12 +632,12 @@ class olxParser:
         while next_page:
             page += 1
             page_urls.append(next_page)
-            response = await self._make_request(next_page, json_response=True, use_proxy=False)
+            response = await self._make_request(next_page, json_response=True)
             next_page = response.get('links', {}).get('next', {}).get('href')
             print(f"\r🔄  Страница {page}", end='', flush=True)
 
         tasks = [
-            self._make_request(url, json_response=True, use_proxy=False)
+            self._make_request(url, json_response=True)
             for url
             in page_urls
         ]
@@ -674,7 +674,6 @@ class olxParser:
         with yaspin(text="Чтение") as spinner:
             wb = load_workbook(wb_path)
             ws = wb.active
-            time.sleep(1)
             if show_info:
                 spinner.text = 'Готово'
                 spinner.ok('✔️')
@@ -696,7 +695,6 @@ class olxParser:
             await coro
 
         with yaspin(text="Сохранение") as spinner:
-            time.sleep(1)
             wb.save(wb_path)
             if show_info:
                 spinner.text = 'Сохранено'
@@ -706,14 +704,7 @@ class olxParser:
             os.rename(wb_path, completed_wb_path)
 
         if show_info:
-            print('\n[процесс завершил работу с кодом 0]')
-            while True:
-                answer = input(f"Теперь вы можете закрыть этот терминал с помощью клавиши {UNDERLINED}Q{RESET}{WHITE}. Или нажмите клавишу {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска.")
-                if answer.lower() == 'q' or answer.lower() == 'й':
-                    break
-                os.startfile(os.path.join(self.data_dir, os.path.dirname(wb_path)))
-                os.system("cls")
-                os.execl(sys.executable, sys.executable, *sys.argv)
+            os.startfile(os.path.join(self.data_dir, os.path.dirname(wb_path)))
 
     async def run(self, region_id: int = None, city_id: int = None):
         """
@@ -750,6 +741,7 @@ class olxParser:
 
         for n_region, region in enumerate(regions):
             logger.debug(f"🏷  repr(region)")
+
             if n_region < indexes["region"]:
                 continue  # Пропускаем уже обработанные регионы
 
@@ -762,6 +754,7 @@ class olxParser:
 
             for n_city, city in enumerate(cities):
                 logger.debug(f"🏷  {repr(city)}")
+
                 if n_region == indexes["region"] and n_city < indexes["city"]:
                     continue  # Пропускаем уже обработанные города
 
@@ -780,6 +773,7 @@ class olxParser:
                     print(help_message)
                     for n_category, category in enumerate(categories):
                         logger.debug(f"🏷  repr(category)")
+
                         if n_region == indexes["region"] and n_city == indexes["city"] and n_category < indexes["category"]:
                             continue  # Пропускаем уже обработанные категории
 
@@ -822,5 +816,4 @@ class olxParser:
             if answer.lower() == 'q' or answer.lower() == 'й':
                 break
             os.startfile(self.data_dir)
-            os.system("cls")
             os.execl(sys.executable, sys.executable, *sys.argv)

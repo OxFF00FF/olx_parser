@@ -45,12 +45,6 @@ async def get_data(
         # 'allow_redirects': True
     }
 
-    if use_proxy is None:
-        use_proxy = app_config.USE_PROXY
-
-    if use_proxy and app_config.USE_PROXY:
-        request_args['proxy'] = proxy
-
     method = 'post' if data or payload else 'get'
     if method == 'post':
         if data:
@@ -58,11 +52,16 @@ async def get_data(
         elif payload:
             request_args['json'] = payload
 
-    if app_config.DEBUG:
-        logger.debug(f"Using proxy: {proxy}")
-        logger.debug(f"{method} · {url}")
+    if use_proxy is None:
+        use_proxy = app_config.USE_PROXY
+
+    if use_proxy:
+        request_args['proxy'] = proxy
+        logger.debug(f"🌐  Using proxy: {proxy}")
 
     try:
+        logger.debug(f"{'🔵  ' if method == 'get' else '🟠  '}{method.upper()} · {url}")
+
         async with AsyncSession() as session:
             response = await session.get(**request_args) if method == 'get' else await session.post(**request_args)
             status = response.status_code
