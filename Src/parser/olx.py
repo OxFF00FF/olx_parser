@@ -145,7 +145,7 @@ class olxParser:
 
             if status == 200:
                 attempt += 1
-                logger.debug(f"✔️  [{attempt}/{retries}] Request success. Status:{LIGHT_GREEN}{status}{WHITE}")
+                logger.debug(f"✔️  Request success. Status: {LIGHT_GREEN}{status}{WHITE}")
                 return response
 
             elif status == 404:
@@ -160,10 +160,11 @@ class olxParser:
 
             elif status == 500:
                 attempt += 1
+                if '407' in response:
+                    logger.error(f"⚠️  [{attempt}/{retries}] Неверные данные для авторизации прокси. Status {MAGENTA}{status}{WHITE} · {response.split('See')[0]}")
+
                 if attempt == 5:
                     logger.error(f"⚠️  [{attempt}/{retries}] Не удалсоь выполнить запрос. Status: {RED}{status}{WHITE} · {response.split('See')[0]}")
-                if '407' in response:
-                    raise RuntimeError("Неверные данные для авторизации прокси")
                 await asyncio.sleep(delay)
 
             else:
@@ -227,12 +228,12 @@ class olxParser:
 
         url = str(URL('https://www.olx.ua/api/v1/offers/metadata/search/').with_query(params))
         response = await self._make_request(url, headers, json_response=True, use_proxy=False)
-        data = response.get('data', [])
+        data = response.get('data', {})
 
         regions = [
             Region(id=item.get('id'), count=item.get('count'), name=item.get('label'), url=f"https://www.olx.ua/{item.get('url').strip('/')}")
             for item
-            in data.get('facets', {}).get(facet_field, [])
+            in data.get('facets', []).get(facet_field, [])
         ]
 
         if self._save_json:
@@ -255,7 +256,7 @@ class olxParser:
 
         url = str(URL('https://www.olx.ua/api/v1/targeting/data/').with_query(params))
         response = await self._make_request(url, json_response=True, use_proxy=False)
-        targeting = response.get('data', []).get('targeting', {})
+        targeting = response.get('data', {}).get('targeting', [])
         return ' > '.join([v for k, v in targeting.items() if 'name' in k])
 
     async def _get_offer_id(self, url: str) -> OfferID:
@@ -643,7 +644,7 @@ class olxParser:
         results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=self._ascii)
 
         for response in results:
-            all_offers_raw.extend(response.get('data', []))
+            all_offers_raw.extend(response.get('data', {}))
 
         return [self._format_offer(offer) for offer in all_offers_raw]
 
@@ -673,6 +674,7 @@ class olxParser:
         with yaspin(text="Чтение") as spinner:
             wb = load_workbook(wb_path)
             ws = wb.active
+            time.sleep(1)
             if show_info:
                 spinner.text = 'Готово'
                 spinner.ok('✔️')
@@ -694,6 +696,7 @@ class olxParser:
             await coro
 
         with yaspin(text="Сохранение") as spinner:
+            time.sleep(1)
             wb.save(wb_path)
             if show_info:
                 spinner.text = 'Сохранено'
@@ -746,7 +749,7 @@ class olxParser:
             indexes["region"] = 0  # сбрасываем прогресс, чтобы начать с начала выбранного региона
 
         for n_region, region in enumerate(regions):
-            logger.debug(repr(region))
+            logger.debug(f"🏷  repr(region)")
             if n_region < indexes["region"]:
                 continue  # Пропускаем уже обработанные регионы
 
@@ -758,7 +761,7 @@ class olxParser:
                 indexes["city"] = 0  # сбрасываем прогресс по городам, чтобы начать с начала выбранного города
 
             for n_city, city in enumerate(cities):
-                logger.debug(repr(city))
+                logger.debug(f"🏷  {repr(city)}")
                 if n_region == indexes["region"] and n_city < indexes["city"]:
                     continue  # Пропускаем уже обработанные города
 
@@ -776,7 +779,7 @@ class olxParser:
                 else:
                     print(help_message)
                     for n_category, category in enumerate(categories):
-                        logger.debug(repr(category))
+                        logger.debug(f"🏷  repr(category)")
                         if n_region == indexes["region"] and n_city == indexes["city"] and n_category < indexes["category"]:
                             continue  # Пропускаем уже обработанные категории
 
