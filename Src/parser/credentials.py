@@ -215,6 +215,8 @@ def get_token(user='guest', show_info=None) -> str | None:
             if show_info:
                 print(f"\n⌛️  Время действия токена: {LIGHT_MAGENTA}{formatted_time}{WHITE}")
                 return
+            else:
+                return token
 
         else:
             print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Обновляем")

@@ -5,7 +5,7 @@ import time
 from Src.app.colors import *
 from Src.app.logging_config import logger
 from Src.parser.authorization import get_session_id
-from Src.parser.credentials import get_auth_code, get_access_token
+from Src.parser.credentials import get_auth_code, get_access_token, get_token
 from Src.parser.utils import create_banner
 
 
@@ -17,14 +17,15 @@ def banner():
 
 
 def main_menu():
-    sid = get_session_id()
+    token = get_token()
+    session = f'{LIGHT_GREEN}Сессия активна{WHITE}' if token else f'{RED}Необходима авторизация{WHITE}'
 
-    if sid:
+    if token:
         print(f'╭───────  ГЛАВНОЕ МЕНЮ  ─────────╮ \n'
               f'1.  {LIGHT_YELLOW}Собрать объявления {LIGHT_BLUE}региона{WHITE} \n'
               f'2.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_CYAN}файла{WHITE} \n'
               f'3.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_MAGENTA}города{WHITE} \n'
-              f'    {LIGHT_GREEN}Сессия активна{WHITE} \n'
+              f'    {session} \n'
               f'╰────────────────────────────────╯ \n')
     else:
         print(f'╭───────  ГЛАВНОЕ МЕНЮ  ─────────╮ \n'
@@ -172,7 +173,7 @@ async def authorize():
         print("✔️  Вы успешно вошли в аккаунт")
 
     else:
-        print(f"❌  Не удалось войти. Удалите файлы authorize.json, credentials.json в папке data, папку data/profiles/guest и повторите еще раз")
+        print(f"❌  Не удалось войти. Удалите файлы `authorize.json`, `credentials.json` в папке `data`, папку `chrome/profiles/guest` и повторите еще раз")
 
     input(f"Нажмите {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска")
     os.execl(sys.executable, sys.executable, *sys.argv)

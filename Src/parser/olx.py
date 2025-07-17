@@ -731,7 +731,10 @@ class olxParser:
         time.sleep(1)
 
         total_collected = 0
-        indexes_path = os.path.join(self.data_dir, 'last_indexes.json')
+
+        region_key = str(region_id) if region_id is not None else "all"
+        city_key = str(city_id) if city_id is not None else "all"
+        indexes_path = os.path.join(self.data_dir, f"last_indexes_{region_key}_{city_key}.json")
 
         # Получаем сохранённые индексы (если есть)
         indexes = open_json(indexes_path) if os.path.exists(indexes_path) else {"region": 0, "city": 0, "category": 0}
@@ -765,6 +768,8 @@ class olxParser:
 
                 if not categories:
                     print(" | Объявлений не найдено")
+                    if os.path.exists(indexes_path):
+                        os.remove(indexes_path)
                     input(f"Нажмите {UNDERLINED}ENTER{RESET}{WHITE} для перезапуска")
                     os.execl(sys.executable, sys.executable, *sys.argv)
                     exit()
@@ -784,7 +789,7 @@ class olxParser:
                         max_offers = offers_count.visible_total
 
                         total_collected += max_offers
-                        print(f"{LIGHT_BLUE}[{n_category + 1} / {len(categories)}]{WHITE} |   🆔  {category.id} · {YELLOW}{category_name[:80].ljust(80)}{WHITE} | "
+                        print(f"{LIGHT_BLUE}[{n_category + 1} / {len(categories)}]{WHITE} |   🆔  {category.id} · {YELLOW}{category_name[:70].ljust(70)}{WHITE} | "
                               f"📰  {BOLD}{LIGHT_MAGENTA}{offers_count.total}{RESET} / "
                               f"📚  {BOLD}{LIGHT_CYAN}{total_pages}{RESET}{WHITE} / "
                               f"📥  {BOLD}{RED}{max_offers}{RESET}{WHITE} / "
@@ -805,6 +810,8 @@ class olxParser:
             break
 
         print(f"✅  Парсинг завершён · Всего собрано объявлений: {BOLD}{total_collected}{RESET}{WHITE}")
+        if os.path.exists(indexes_path):
+            os.remove(indexes_path)
 
         print('\n[процесс завершил работу с кодом 0]')
         while True:
