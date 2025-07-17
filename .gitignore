@@ -1,9 +1,9 @@
 .idea
 .venv
+chrome
 data
 logs
 tests
 .env
 proxies.txt
 *.bak
-chrome
