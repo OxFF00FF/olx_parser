@@ -7,7 +7,7 @@ from Src.app.colors import *
 from Src.app.config import app_config
 
 
-def set_logger(log_name: str = 'app', log_file: str = 'logs.log', console_level=logging.INFO, file_level=logging.DEBUG):
+def set_logger(log_name: str = 'app', log_file: str = 'logs.log', console_level=logging.INFO, file_level=logging.INFO):
     class ColorFormatter(logging.Formatter):
         LEVEL_COLORS = {
             logging.DEBUG: LIGHT_BLUE,
@@ -72,12 +72,12 @@ def set_logger(log_name: str = 'app', log_file: str = 'logs.log', console_level=
     console_handler.setLevel(console_level)
     app_logger.addHandler(console_handler)
 
-    # # File handler (RotatingFileHandler)
-    # file_handler = RotatingFileHandler(log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding='utf-8')
-    # file_handler.setLevel(file_level)
-    # file_formatter = FileFormatter()
-    # file_handler.setFormatter(file_formatter)
-    # app_logger.addHandler(file_handler)
+    # File handler (RotatingFileHandler)
+    file_handler = RotatingFileHandler(log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding='utf-8')
+    file_handler.setLevel(file_level)
+    file_formatter = FileFormatter()
+    file_handler.setFormatter(file_formatter)
+    app_logger.addHandler(file_handler)
 
     return logging.getLogger(log_name)
 

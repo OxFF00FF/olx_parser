@@ -41,6 +41,7 @@ class olxParser:
     _bar = WHITE + '{desc} ' + LIGHT_BLUE + '| {bar} |' + LIGHT_YELLOW + ' {n_fmt}/{total_fmt} ' + DARK_GRAY + ' [Прошло: {elapsed}c · Осталось: {remaining}c · {rate_fmt}]  ' + WHITE
     _txt_all_offers = f"🔄  Парсим объявления со всех страниц  "
     _txt_numbers = f"🔄  Парсим номер телефонов  "
+    _ascii = ' ▱▰'
 
     def __init__(self, max_workers: int = 5, Json: bool = None, Xlsx: bool = None):
         self._workers = max_workers
@@ -130,20 +131,6 @@ class olxParser:
 
         return offer
 
-    async def _pagination(self, category_url: str) -> int:
-        """Возвраащет пагинацию для передавнной ссылки на категорию"""
-        logger.info(category_url)
-
-        response = await self._make_request(category_url)
-
-        html = self._get_html(response)
-
-        script_text = next((item.get_text(strip=True) for item in html.find_all('script') if item.get('id') == 'olx-init-config'), None)
-        match = re.search(r'window.__PRERENDERED_STATE__= (".*?");(?:\r\n|\r|\n)', script_text, re.DOTALL)
-        if match:
-            data = json.loads(json.loads(match.group(1)))
-            return data.get('listing', {}).get('listing', {}).get('totalPages', 0)
-
     async def _make_request(self, url: str, headers: dict = None, data: dict = None, payload: dict = None, json_response: bool = None, use_proxy: bool = None) -> str | dict | None:
         """
         Делает запрос и проверяет статус ответа
@@ -197,126 +184,21 @@ class olxParser:
 
         return {}
 
-    async def get_categories(self) -> list[Category]:
-        """
-        Получает список всех категорий
-        """
-        payload = {
-            'operationName': 'InventoryMetadata',
-            'variables': {},
-            'query': 'query InventoryMetadata {\n  categories {\n    id\n    name\n    parent_id\n  }\n}',
-        }
-        url = 'https://production-graphql.eu-sharedservices.olxcdn.com/graphql'
-        response = await self._make_request(url, payload=payload, json_response=True)
-        data = response.get('data').get('categories')
-        return [Category(item.get('id'), item.get('name'), 0, item.get('parent_id')) for item in data]
+    async def _pagination(self, category_url: str) -> int:
+        """Возвраащет пагинацию для передавнной ссылки на категорию"""
+        logger.info(category_url)
 
-    async def get_items_count_for_all_categories(self, region_id: int = None, city_id: int = None, region_name: str = None, city_name: str = None, sorting_by: str = 'id') -> list[Category]:
-        """
-        Возвращает количество объявлений в каждой категории по ID региона или ID города
-        """
-        headers = {'accept-language': 'ru'}
-
-        params = {}
-        if region_id:
-            params['region_id'] = region_id
-        if city_id:
-            params['city_id'] = city_id
-
-        url = str(URL('https://www.olx.ua/api/v1/offers/metadata/search-categories/').with_query(params))
-        response = await self._make_request(url, headers, json_response=True)
-        data = response.get('data', {}).get('categories', [])
-
-        if sorting_by == 'id':
-            categories = sorted(data, key=lambda item: item.get('id', 0))
-        elif sorting_by == 'count':
-            categories = sorted(data, key=lambda item: item.get('count', 0))
-        else:
-            categories = data
-
-        if self._save_json:
-            save_json(data, os.path.join(self.out_dir, f'{region_id}_{region_name}_{city_name}__categories.json'))
-        return [Category(item['id'], None, item['count'], 0) for item in categories]
-
-    async def get_category_info(self, url) -> Category:
-        """
-        Получает ID и TITLE категории по URL (https://www.olx.ua/nedvizhimost/kvartiry/)
-        """
-        breadcrumb = urlparse(url).path.strip('/').replace('/', ',')
-        url = f"https://www.olx.ua/api/v1/friendly-links/query-params/{breadcrumb}"
-        data = await self._make_request(url, json_response=True)
-
-        category_id = data.get('data').get('category_id')
-        title = data.get('metadata').get('seo').get('title')
-
-        return Category(category_id, title, 0, 0)
-
-    async def _get_offer_id(self, url: str) -> OfferID:
-        """
-        Получает и возвращает ID объявления из переданной ссылки
-         - Ссылка объявление https://www.olx.ua/d/uk/obyavlenie/vdeokarta-pny-geforce-rtx-4060-ti-8gb-verto-vcg4060t8dfxpb1-o-IDWYtNQ.html
-
-        :param url: Ссылка
-        :return: Возвращает ID Объявления
-        """
-        response = await self._make_request(url)
+        response = await self._make_request(category_url, use_proxy=False)
 
         html = self._get_html(response)
-        script_text = next((item.get_text(strip=True) for item in html.find_all('script') if '@type' in item.text), None)
 
-        try:
-            data = json.loads(script_text)
-            ad_id = data.get('sku')
-            return OfferID(value=ad_id)
-        except Exception as e:
-            logger.error(f"Failed to get ad_id. Error: {e} · {url}")
+        script_text = next((item.get_text(strip=True) for item in html.find_all('script') if item.get('id') == 'olx-init-config'), None)
+        match = re.search(r'window.__PRERENDERED_STATE__= (".*?");(?:\r\n|\r|\n)', script_text, re.DOTALL)
+        if match:
+            data = json.loads(json.loads(match.group(1)))
+            return data.get('listing', {}).get('listing', {}).get('totalPages', 0)
 
-    async def get_regions(self, sorting_by: str = 'id') -> list[Region]:
-        """
-        Возвращает сортированный по ID список регионов
-
-        :param sorting_by: Сортировка (id, name)
-        """
-        url = 'https://www.olx.ua/api/v1/geo-encoder/regions/'
-
-        response = await self._make_request(url, json_response=True)
-        data = response.get('data', [])
-
-        if sorting_by == 'id':
-            regions = sorted([(item.get('id'), item.get('name')) for item in data], key=lambda x: x[0])
-        elif sorting_by == 'name':
-            regions = sorted([(item.get('id'), item.get('name')) for item in data], key=lambda x: x[1])
-        else:
-            regions = [(item.get('id'), item.get('name')) for item in data]
-
-        if self._save_json:
-            save_json(data, os.path.join(self.out_dir, 'olx__regions.json'))
-        return [Region(id=item[0], name=item[1]) for item in regions]
-
-    async def get_cities(self, region: Region, sorting_by='id') -> list[City]:
-        """
-        Возвращает список ID городов выбранного регона
-
-        :param region: ID региона 1-25
-        :param sorting_by: Сортировка (id, name)
-        """
-        url = f'https://www.olx.ua/api/v1/geo-encoder/regions/{region.id}/cities/?limit=5000'
-
-        response = await self._make_request(url, json_response=True)
-        data = response.get('data')
-
-        if sorting_by == 'id':
-            cities = sorted([(item.get('id'), item.get('name')) for item in data], key=lambda x: x[0])
-        elif sorting_by == 'name':
-            cities = sorted([(item.get('id'), item.get('name')) for item in data], key=lambda x: x[1])
-        else:
-            cities = [(item.get('id'), item.get('name')) for item in data]
-
-        if self._save_json:
-            save_json(data, os.path.join(self.out_dir, f'{region.id}_{region.name}__cities.json'))
-        return [City(id=item[0], name=item[1]) for item in cities]
-
-    async def get_offers_count(self, category_id: int, region_id: int = None, city_id: int = None, facet_field: str = 'region') -> OffersMeta:
+    async def _get_offers_count(self, category_id: int, region_id: int = None, city_id: int = None, facet_field: str = 'region') -> OffersMeta:
         """
         Получает общее, видимое и количество объявлений в регионах по ID Категории. И дополнительно по ID Региона и ID Города
 
@@ -344,7 +226,7 @@ class olxParser:
             params['city_id'] = city_id
 
         url = str(URL('https://www.olx.ua/api/v1/offers/metadata/search/').with_query(params))
-        response = await self._make_request(url, headers, json_response=True)
+        response = await self._make_request(url, headers, json_response=True, use_proxy=False)
         data = response.get('data', [])
 
         regions = [
@@ -357,7 +239,7 @@ class olxParser:
             save_json(data, os.path.join(self.out_dir, f'category_{category_id}_{region_id}_{city_id}__offers_count.json'))
         return OffersMeta(data.get('visible_total_count'), data.get('total_count'), regions)
 
-    async def get_category_name(self, category_id: int) -> str:
+    async def _get_category_name(self, category_id: int) -> str:
         """Возвращает название и путь категории. Например `Главная > Недвижимость > Квартиры` по переданному ID категории"""
         params = {
             'params[category_id]': category_id,
@@ -372,76 +254,29 @@ class olxParser:
         }
 
         url = str(URL('https://www.olx.ua/api/v1/targeting/data/').with_query(params))
-        response = await self._make_request(url, json_response=True)
+        response = await self._make_request(url, json_response=True, use_proxy=False)
         targeting = response.get('data', []).get('targeting', {})
         return ' > '.join([v for k, v in targeting.items() if 'name' in k])
 
-    async def get_offers_from_page(self, category_url: str) -> list[dict]:
+    async def _get_offer_id(self, url: str) -> OfferID:
         """
-        Получает список объявлений со всех страниц категории(ссылки).
+        Получает и возвращает ID объявления из переданной ссылки
+         - Ссылка объявление https://www.olx.ua/d/uk/obyavlenie/vdeokarta-pny-geforce-rtx-4060-ti-8gb-verto-vcg4060t8dfxpb1-o-IDWYtNQ.html
 
-        1. Определяется количество страниц в категории.
-        2. Для каждой страницы извлекает информацию об объявлениях.
-        3. Парсит данные с помощью BeautifulSoup и регулярных выражений.
-        4. Возвращает список словарей с данными по каждому объявлению (идентификатор, URL, заголовок и контакт).
-
-        :param category_url: URL категории, с которой необходимо получить предложения.
-                             Должен быть корректным URL для страницы с товарами или объявлениями.
-        :return: Список словарей, каждый из которых содержит информацию о предложении.
-                 Каждый словарь имеет следующие ключи:
-                    - 'id' (str): Уникальный идентификатор объявления.
-                    - 'url' (str): URL страницы объявления.
-                    - 'title' (str): Заголовок объявления.
-                    - 'contact' (dict): Контактная информация (если доступна) из объявления.
-
-        Пример возвращаемого результата:
-        [
-            {
-                'id': '868972409',
-                'url': 'https://www.olx.ua/api/v1/offers/868972409',
-                'title': 'Продается видеокарта',
-                'contact': {
-                    "name": "AMAZIN інтернет магазин",
-                    "phone": true,
-                    "chat": true,
-                    "negotiation": true,
-                    "courier": true
-                }
-            },
-            ...
-        ]
+        :param url: Ссылка
+        :return: Возвращает ID Объявления
         """
+        response = await self._make_request(url, use_proxy=False)
 
-        result = []
-        self._category_url = category_url
+        html = self._get_html(response)
+        script_text = next((item.get_text(strip=True) for item in html.find_all('script') if '@type' in item.text), None)
 
-        total_pages = await self._pagination(category_url)
-        tasks = [
-            self._make_request(f'{category_url}/?page={page + 1}')
-            for page
-            in range(total_pages)
-        ]
-
-        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=' ▱▰')
-        for response in results:
-            html = self._get_html(response)
-            data = self._find_json(html)
-
-            products = data.get('listing', {}).get('listing', {}).get('ads', [])
-            for n, product in enumerate(products):
-                title = product.get('title')
-                url = product.get('url')
-                result.append(dict(
-                    id=product.get('id'),
-                    title=title,
-                    url=url,
-                    contact=product.get('contact'))
-                )
-                logger.debug(f"[{n}/{len(products)}] |  {title[:50].ljust(50)}  ·  {url}")
-
-        if self._save_json:
-            await save_json(result, os.path.join(self.out_dir, 'urls.json'))
-        return result
+        try:
+            data = json.loads(script_text)
+            ad_id = data.get('sku')
+            return OfferID(value=ad_id)
+        except Exception as e:
+            logger.error(f"Failed to get ad_id. Error: {e} · {url}")
 
     async def _offers_from_first_page(self, category_id: int, region_id: int = None, city_id: int = None) -> tuple[list, str | None]:
         """
@@ -470,50 +305,171 @@ class olxParser:
             params['city_id'] = city_id
 
         url = str(URL(self.__api_offers_url).with_query(params))
-        response = await self._make_request(url, json_response=True)
+        response = await self._make_request(url, json_response=True, use_proxy=False)
         offers = response.get('data')
 
         next_page = response.get('links', {}).get('next', {}).get('href')
         return offers, next_page
 
-    async def get_offers_from_api(self, category_id: int, region_id: int = None, city_id: int = None) -> list[Offer]:
+    async def get_phone_number(self, ad_id: OfferID, response_only: bool = None) -> str | dict | None:
         """
-        Получает все объявления из API, проходя по всем страницам результата.
+        Асинхронно получает номера телефонов для объявления по его ID через API.
 
-        Выполняет первый запрос к API и получает ссылки на следующие страницы.
-        Загружает остальные страницы параллельно, собирает все результаты и форматирует их в список объектов `Offer`.
+        Формирует запрос с необходимыми заголовками, включая токен авторизации.
+        При ошибке пытается обновить токен и повторить запрос.
+        Если `response_only` установлен, возвращает полный JSON-ответ, иначе — объединённые номера телефонов в строку.
 
-        :param category_id: Идентификатор категории товаров.
-        :param region_id: (Необязательный) Идентификатор региона.
-        :param city_id: (Необязательный) Идентификатор города.
+        :param ad_id: Идентификатор объявления.
+        :param response_only: Если True — возвращает полный ответ API вместо строкового номера.
 
-        :return: Список отформатированных объявлений (`Offer`).
+        :return: Строка с номерами телефонов через " · ", или словарь с данными ответа, или None при ошибке.
         """
-        all_offers_raw = []
-        page = 0
+        headers = {
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'authorization': get_token(),
+            'cache-control': 'no-cache',
+            'pragma': 'no-cache',
+            'priority': 'u=0, i',
+            'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'none',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        }
 
-        offers, next_page = await self._offers_from_first_page(category_id, region_id, city_id)
-        all_offers_raw.extend(offers or [])
+        phones = []
+        url = f'{self.__base_url}/api/v1/offers/{ad_id}/limited-phones/'
 
-        page_urls = []
-        while next_page:
-            page += 1
-            page_urls.append(next_page)
-            response = await self._make_request(next_page, json_response=True)
-            next_page = response.get('links', {}).get('next', {}).get('href')
-            print(f"\r🔄  Страница {page}", end='', flush=True)
+        try:
+            async with self._semaphore:
+                data = await self._make_request(url, headers, json_response=True, use_proxy=True)
+                if response_only:
+                    return data
 
-        tasks = [
-            self._make_request(url, json_response=True)
-            for url
-            in page_urls
-        ]
-        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=' ▱▰')
+                if 'error' in data:
+                    error = data.get('error', {})
+                    error_detail = error.get('detail')
 
-        for response in results:
-            all_offers_raw.extend(response.get('data', []))
+                    if error == 'invalid_token' or error_detail == 'Disallowed for this user':
+                        headers['authorization'] = get_token()
+                        data_2 = await self._make_request(url, headers, json_response=True, use_proxy=True)
+                        phones = data_2.get('data', {}).get('phones', [])
 
-        return [self._format_offer(offer) for offer in all_offers_raw]
+                    else:
+                        logger.debug(f"⛔  Failed to get phone_numbers: {data}")
+
+                else:
+                    phones = data.get('data', {}).get('phones', [])
+
+                return ' · '.join([str(p) for p in phones]) if phones else ''
+
+        except:
+            logger.debug(f"⚠️  Failed to get phone_numbers: {self.__api_offers_url}/{ad_id}")
+            return None
+
+    async def get_items_count_for_all_categories(self, region_id: int = None, city_id: int = None, region_name: str = None, city_name: str = None, sorting_by: str = 'id') -> list[Category]:
+        """
+        Возвращает количество объявлений в каждой категории по ID региона или ID города
+        """
+        headers = {'accept-language': 'ru'}
+
+        params = {}
+        if region_id:
+            params['region_id'] = region_id
+        if city_id:
+            params['city_id'] = city_id
+
+        url = str(URL('https://www.olx.ua/api/v1/offers/metadata/search-categories/').with_query(params))
+        response = await self._make_request(url, headers, json_response=True, use_proxy=False)
+        data = response.get('data', {}).get('categories', [])
+
+        if sorting_by == 'id':
+            categories = sorted(data, key=lambda item: item.get('id', 0))
+        elif sorting_by == 'count':
+            categories = sorted(data, key=lambda item: item.get('count', 0))
+        else:
+            categories = data
+
+        if self._save_json:
+            save_json(data, os.path.join(self.out_dir, f'{region_id}_{region_name}_{city_name}__categories.json'))
+        return [Category(item['id'], None, item['count'], 0) for item in categories]
+
+    async def get_categories(self) -> list[Category]:
+        """
+        Получает список всех категорий
+        """
+        payload = {
+            'operationName': 'InventoryMetadata',
+            'variables': {},
+            'query': 'query InventoryMetadata {\n  categories {\n    id\n    name\n    parent_id\n  }\n}',
+        }
+        url = 'https://production-graphql.eu-sharedservices.olxcdn.com/graphql'
+        response = await self._make_request(url, payload=payload, json_response=True, use_proxy=False)
+        data = response.get('data').get('categories')
+        return [Category(item.get('id'), item.get('name'), 0, item.get('parent_id')) for item in data]
+
+    async def get_category_info(self, url) -> Category:
+        """
+        Получает ID и TITLE категории по URL (https://www.olx.ua/nedvizhimost/kvartiry/)
+        """
+        breadcrumb = urlparse(url).path.strip('/').replace('/', ',')
+        url = f"https://www.olx.ua/api/v1/friendly-links/query-params/{breadcrumb}"
+        data = await self._make_request(url, json_response=True, use_proxy=False)
+
+        category_id = data.get('data').get('category_id')
+        title = data.get('metadata').get('seo').get('title')
+
+        return Category(category_id, title, 0, 0)
+
+    async def get_regions(self, sorting_by: str = 'id') -> list[Region]:
+        """
+        Возвращает сортированный по ID список регионов
+
+        :param sorting_by: Сортировка (id, name)
+        """
+        url = 'https://www.olx.ua/api/v1/geo-encoder/regions/'
+
+        response = await self._make_request(url, json_response=True, use_proxy=False)
+        data = response.get('data', [])
+
+        if sorting_by == 'id':
+            regions = sorted([(item.get('id'), item.get('name')) for item in data], key=lambda x: x[0])
+        elif sorting_by == 'name':
+            regions = sorted([(item.get('id'), item.get('name')) for item in data], key=lambda x: x[1])
+        else:
+            regions = [(item.get('id'), item.get('name')) for item in data]
+
+        if self._save_json:
+            save_json(data, os.path.join(self.out_dir, 'olx__regions.json'))
+        return [Region(id=item[0], name=item[1]) for item in regions]
+
+    async def get_cities(self, region: Region, sorting_by='id') -> list[City]:
+        """
+        Возвращает список ID городов выбранного регона
+
+        :param region: ID региона 1-25
+        :param sorting_by: Сортировка (id, name)
+        """
+        url = f'https://www.olx.ua/api/v1/geo-encoder/regions/{region.id}/cities/?limit=5000'
+
+        response = await self._make_request(url, json_response=True, use_proxy=False)
+        data = response.get('data')
+
+        if sorting_by == 'id':
+            cities = sorted([(item.get('id'), item.get('name')) for item in data], key=lambda x: x[0])
+        elif sorting_by == 'name':
+            cities = sorted([(item.get('id'), item.get('name')) for item in data], key=lambda x: x[1])
+        else:
+            cities = [(item.get('id'), item.get('name')) for item in data]
+
+        if self._save_json:
+            save_json(data, os.path.join(self.out_dir, f'{region.id}_{region.name}__cities.json'))
+        return [City(id=item[0], name=item[1]) for item in cities]
 
     async def get_offers_from_graphql(self, page: int = None, category_id: int = None, region_id: int = None, city_id: int = None, currency: str = None) -> dict:
         """
@@ -578,76 +534,120 @@ class olxParser:
         }
 
         url = 'https://www.olx.ua/apigateway/graphql'
-        response = await self._make_request(url, payload=payload, json_response=True)
+        response = await self._make_request(url, payload=payload, json_response=True, use_proxy=False)
         data = response.get('data', {})
 
         if self._save_json:
             save_json(data, os.path.join(self.out_dir, f'{category_id}_{region_id}_{city_id}__offers_graphql.json'))
         return data.get('clientCompatibleListings', {}).get('data', {})
 
-    async def get_phone_number(self, ad_id: OfferID, use_proxy: bool = None, response_only: bool = None) -> str | dict | None:
+    async def get_offers_from_page(self, category_url: str) -> list[dict]:
         """
-        Асинхронно получает номера телефонов для объявления по его ID через API.
+        Получает список объявлений со всех страниц категории(ссылки).
 
-        Формирует запрос с необходимыми заголовками, включая токен авторизации.
-        При ошибке пытается обновить токен и повторить запрос.
-        Если `response_only` установлен, возвращает полный JSON-ответ, иначе — объединённые номера телефонов в строку.
+        1. Определяется количество страниц в категории.
+        2. Для каждой страницы извлекает информацию об объявлениях.
+        3. Парсит данные с помощью BeautifulSoup и регулярных выражений.
+        4. Возвращает список словарей с данными по каждому объявлению (идентификатор, URL, заголовок и контакт).
 
-        :param ad_id: Идентификатор объявления.
-        :param use_proxy: Флаг использования прокси для запроса.
-        :param response_only: Если True — возвращает полный ответ API вместо строкового номера.
+        :param category_url: URL категории, с которой необходимо получить предложения.
+                             Должен быть корректным URL для страницы с товарами или объявлениями.
+        :return: Список словарей, каждый из которых содержит информацию о предложении.
+                 Каждый словарь имеет следующие ключи:
+                    - 'id' (str): Уникальный идентификатор объявления.
+                    - 'url' (str): URL страницы объявления.
+                    - 'title' (str): Заголовок объявления.
+                    - 'contact' (dict): Контактная информация (если доступна) из объявления.
 
-        :return: Строка с номерами телефонов через " · ", или словарь с данными ответа, или None при ошибке.
+        Пример возвращаемого результата:
+        [
+            {
+                'id': '868972409',
+                'url': 'https://www.olx.ua/api/v1/offers/868972409',
+                'title': 'Продается видеокарта',
+                'contact': {
+                    "name": "AMAZIN інтернет магазин",
+                    "phone": true,
+                    "chat": true,
+                    "negotiation": true,
+                    "courier": true
+                }
+            },
+            ...
+        ]
         """
-        headers = {
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-            'authorization': get_token(),
-            'cache-control': 'no-cache',
-            'pragma': 'no-cache',
-            'priority': 'u=0, i',
-            'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'sec-fetch-user': '?1',
-            'upgrade-insecure-requests': '1',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-        }
 
-        phones = []
-        url = f'{self.__base_url}/api/v1/offers/{ad_id}/limited-phones/'
+        result = []
+        self._category_url = category_url
 
-        try:
-            async with self._semaphore:
-                data = await self._make_request(url, headers, json_response=True, use_proxy=use_proxy)
-                if response_only:
-                    return data
+        total_pages = await self._pagination(category_url)
+        tasks = [
+            self._make_request(f'{category_url}/?page={page + 1}', use_proxy=False)
+            for page
+            in range(total_pages)
+        ]
 
-                if 'error' in data:
-                    error = data.get('error', {})
-                    error_detail = error.get('detail')
+        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=self._ascii)
+        for response in results:
+            html = self._get_html(response)
+            data = self._find_json(html)
 
-                    if error == 'invalid_token' or error_detail == 'Disallowed for this user':
-                        headers['authorization'] = get_token()
-                        data_2 = await self._make_request(url, headers, json_response=True, use_proxy=use_proxy)
-                        phones = data_2.get('data', {}).get('phones', [])
+            products = data.get('listing', {}).get('listing', {}).get('ads', [])
+            for n, product in enumerate(products):
+                title = product.get('title')
+                url = product.get('url')
+                result.append(dict(
+                    id=product.get('id'),
+                    title=title,
+                    url=url,
+                    contact=product.get('contact'))
+                )
+                logger.debug(f"[{n}/{len(products)}] |  {title[:50].ljust(50)}  ·  {url}")
 
-                    else:
-                        logger.debug(f"⛔  Failed to get phone_numbers: {data}")
+        if self._save_json:
+            await save_json(result, os.path.join(self.out_dir, 'urls.json'))
+        return result
 
-                else:
-                    phones = data.get('data', {}).get('phones', [])
+    async def get_offers_from_api(self, category_id: int, region_id: int = None, city_id: int = None) -> list[Offer]:
+        """
+        Получает все объявления из API, проходя по всем страницам результата.
 
-                return ' · '.join([str(p) for p in phones]) if phones else ''
+        Выполняет первый запрос к API и получает ссылки на следующие страницы.
+        Загружает остальные страницы параллельно, собирает все результаты и форматирует их в список объектов `Offer`.
 
-        except:
-            logger.debug(f"⚠️  Failed to get phone_numbers: {self.__api_offers_url}/{ad_id}")
-            return None
+        :param category_id: Идентификатор категории товаров.
+        :param region_id: (Необязательный) Идентификатор региона.
+        :param city_id: (Необязательный) Идентификатор города.
 
-    async def parse_phones_from_file(self, filename, show_info=None):
+        :return: Список отформатированных объявлений (`Offer`).
+        """
+        all_offers_raw = []
+        page = 0
+
+        offers, next_page = await self._offers_from_first_page(category_id, region_id, city_id)
+        all_offers_raw.extend(offers or [])
+
+        page_urls = []
+        while next_page:
+            page += 1
+            page_urls.append(next_page)
+            response = await self._make_request(next_page, json_response=True, use_proxy=False)
+            next_page = response.get('links', {}).get('next', {}).get('href')
+            print(f"\r🔄  Страница {page}", end='', flush=True)
+
+        tasks = [
+            self._make_request(url, json_response=True, use_proxy=False)
+            for url
+            in page_urls
+        ]
+        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=self._ascii)
+
+        for response in results:
+            all_offers_raw.extend(response.get('data', []))
+
+        return [self._format_offer(offer) for offer in all_offers_raw]
+
+    async def parse_phones_from_file(self, filename: str, show_info: bool = None):
         """
         Парсит номера телефонов из указанного Excel-файла.
 
@@ -712,7 +712,7 @@ class olxParser:
                 os.system("cls")
                 os.execl(sys.executable, sys.executable, *sys.argv)
 
-    async def run(self, region_id=None, city_id=None):
+    async def run(self, region_id: int = None, city_id: int = None):
         """
         Запускает парсер объявлений по регионам, городам и категориям.
 
@@ -775,11 +775,11 @@ class olxParser:
                         if n_region == indexes["region"] and n_city == indexes["city"] and n_category < indexes["category"]:
                             continue  # Пропускаем уже обработанные категории
 
-                        category_name = await self.get_category_name(category.id)
+                        category_name = await self._get_category_name(category.id)
                         offers = await self.get_offers_from_api(category.id, region.id, city.id)
                         save_offers(offers, region_id, region.name, city.id, city.name, category.id, category_name, self.out_dir, self._save_json, self._save_xls)
 
-                        offers_count = await self.get_offers_count(category.id, region.id, city.id)
+                        offers_count = await self._get_offers_count(category.id, region.id, city.id)
                         total_pages = (offers_count.visible_total + limit - 1) // limit
                         max_offers = offers_count.visible_total
 
