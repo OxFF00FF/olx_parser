@@ -1,5 +1,3 @@
-import asyncio
-
 from curl_cffi import AsyncSession
 from curl_cffi.requests.exceptions import DNSError
 
@@ -16,7 +14,7 @@ async def get_data(
         payload=None,
         data=None,
         Json=None,
-        use_proxy=False,
+        use_proxy=None,
         proxy=None,
 ) -> tuple[int, dict | str]:
     """
@@ -34,7 +32,6 @@ async def get_data(
     :return: Кортеж из текста/JSON и статуса ответа.
     """
     # from curl_cffi.requests.impersonate import BrowserTypeLiteral
-    retries, max_retries, delay = 0, 5, 5
     proxy = proxy or get_proxy_random()
 
     request_args = {
@@ -42,15 +39,16 @@ async def get_data(
         'headers': headers,
         'cookies': cookies,
         'params': params,
-        'timeout': 20,
+        'timeout': 10,
         'impersonate': 'chrome',
         'verify': False
         # 'allow_redirects': True
     }
-    if app_config.DEBUG:
-        logger.debug(f"Using proxy: {proxy}")
 
-    if use_proxy:
+    if use_proxy is None:
+        use_proxy = app_config.USE_PROXY
+
+    if use_proxy and app_config.USE_PROXY:
         request_args['proxy'] = proxy
 
     method = 'post' if data or payload else 'get'
@@ -60,34 +58,26 @@ async def get_data(
         elif payload:
             request_args['json'] = payload
 
-    while retries < max_retries:
-        attempt = f"[Attempt {retries + 1}/{max_retries}]"
-        try:
-            async with AsyncSession() as session:
-                response = await session.get(**request_args) if method == 'get' else await session.post(**request_args)
-                status = response.status_code
+    if app_config.DEBUG:
+        logger.debug(f"Using proxy: {proxy}")
+        logger.debug(f"{method} · {url}")
 
-                if app_config.DEBUG:
-                    logger.debug(f"{method} · {response.url}")
+    try:
+        async with AsyncSession() as session:
+            response = await session.get(**request_args) if method == 'get' else await session.post(**request_args)
+            status = response.status_code
 
-                if Json:
-                    try:
-                        return status, response.json()
-                    except Exception:
-                        return status, response.text
-                else:
+            if Json:
+                try:
+                    return status, response.json()
+                except Exception:
                     return status, response.text
-
-        except DNSError:
-            logger.error(f'🌐  Не удалось выполнить запрос, проверьте подключение к интернету')
-            exit()
-
-        except Exception as e:
-            if app_config.DEBUG:
-                logger.warning(f"⚠️  {attempt} Error: {proxy} · {type(e).__name__}. {e}")
-
-            retries += 1
-            if retries < max_retries:
-                await asyncio.sleep(delay)
             else:
-                return 500, f"{proxy} · {type(e).__name__}. {e}"
+                return status, response.text
+
+    except DNSError as e:
+        logger.error(f'🌐  Не удалось выполнить запрос, проверьте подключение к интернету · {e}')
+        return 500, f"{type(e).__name__}. {e}"
+
+    except Exception as e:
+        return 500, f"{proxy} · {type(e).__name__}. {e}"
