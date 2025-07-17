@@ -23,10 +23,10 @@ gray_fill = PatternFill(start_color="bbbbbb", end_color="bbbbbb", fill_type="sol
 hlink_style = Font(color="0000FF", underline="single")
 
 number_style = NamedStyle(name="number_style", number_format="0", alignment=Alignment(horizontal='left'))
-active_status_style = NamedStyle(name="active_style", fill=green_fill, alignment=Alignment(horizontal='center'))
-removed_status_style = NamedStyle(name="removed_style", fill=orange_fill, alignment=Alignment(horizontal='center'))
-not_instock_status_style = NamedStyle(name="not_instock_style", fill=lavender_fill, alignment=Alignment(horizontal='center'))
-not_found_style = NamedStyle(name="not_found_style", fill=gray_fill, alignment=Alignment(horizontal='center'))
+success_status = NamedStyle(name="success_status", fill=green_fill, alignment=Alignment(horizontal='center'))
+error_status = NamedStyle(name="error_status", fill=orange_fill, alignment=Alignment(horizontal='center'))
+hidden_status = NamedStyle(name="hidden_status", fill=lavender_fill, alignment=Alignment(horizontal='center'))
+not_specified_status = NamedStyle(name="not_specified_status", fill=gray_fill, alignment=Alignment(horizontal='center'))
 
 
 def save_offers_excel(content: list[Offer], filepath: str, show_info: bool = True):
@@ -242,10 +242,10 @@ def register_styles(wb: Workbook):
         if style.name not in wb.named_styles:
             wb.add_named_style(style)
 
-    add_style(active_status_style)
-    add_style(removed_status_style)
-    add_style(not_instock_status_style)
-    add_style(not_found_style)
+    add_style(success_status)
+    add_style(error_status)
+    add_style(hidden_status)
+    add_style(not_specified_status)
 
 
 def save_offers(content: list[Offer], region_id, region_name, city_id, city_name, category_id, category_name, out_dir, save_json, save_xls):
@@ -294,9 +294,8 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     :return:
     """
     async with lock:
-        # Формируем прогресс [текущий / всего / осталось]
         counter['value'] += 1
-        progress = f"[{LIGHT_YELLOW}{counter['value']}{WHITE} / {LIGHT_BLUE}{total}{WHITE}]".ljust(20)
+        progress = f"[{LIGHT_YELLOW}{counter['value']}{WHITE} / {LIGHT_BLUE}{total}{WHITE}]"
 
     offer_id = item[0]
     url = item[10]
@@ -307,7 +306,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     # Если номер не указан, удален, скрыт или уже получен, то пропускаем ячейку
     if number_cell.value == 'False':
         number_cell.value = 'не указан'
-        number_cell.style = 'not_found_style'
+        number_cell.style = 'not_specified_status'
         print(f"{progress}  ℹ️{DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
         return
 
@@ -326,13 +325,13 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     response = await parser.get_phone_number(offer_id, response_only=True)
     if response is None:
         number_cell.value = 'ошибка'
-        number_cell.style = 'not_found_style'
-        print(f"{progress}  ❌{RED}  Ошибка: {response}{WHITE} · {url}")
+        number_cell.style = 'error_status'
+        print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}Ошибка при получении номера · {url}")
         return
     if response == {}:
         number_cell.value = 'Captcha'
-        number_cell.style = 'removed_style'
-        print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}Captcha · {url}")
+        number_cell.style = 'error_status'
+        print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}Captcha {''.ljust(9)} ·  {url}")
         return
 
     # Если ответ получен и есть ошибка, то ставим соответствующий статус в ячейку
@@ -340,25 +339,27 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         error = response.get('error', {}).get('detail')
         if error == 'Disallowed for this user':
             number_cell.value = 'скрыт'
-            number_cell.style = 'not_instock_style'
+            number_cell.style = 'hidden_status'
         elif error == 'Ad is not active':
             number_cell.value = 'удален'
-            number_cell.style = 'not_found_style'
+            number_cell.style = 'not_specified_status'
         elif 'Невозможно продолжить' in error:
             number_cell.value = 'Captcha'
-            number_cell.style = 'removed_style'
+            number_cell.style = 'error_status'
+            print(f"{progress}  ❌{RED}  Номер не получен: {WHITE} Captcha {''.ljust(9)} · {url}")
+        else:
             error = error.split('.')[0]
-        print(f"{progress}  ❌{LIGHT_RED}  {error}{WHITE} · {offer_id} · {url}")
+            print(f"{progress}  ❌{RED}  Номер не получен: {WHITE} {error} · {url}")
 
         # Если номер был скрыт, то пытаемся его получить, если все успешно то добавляем его в ячейку
         if number_cell.value == 'скрыт':
             phone = await parser.get_phone_number(offer_id)
             if phone:
                 number_cell.value = phone
-                number_cell.style = 'active_style'
-                print(f"{progress}  ✔️  {GREEN}Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
+                number_cell.style = 'success_status'
+                print(f"{progress}  ✔️{GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
             else:
-                print(f"{progress}  ❌  {RED}Номер не получен: {WHITE} Ошибка 1 {phone=} · {url}")
+                print(f"{progress}  ❌{RED}  Номер не получен: {WHITE} Ошибка 1 · {url}")
 
     else:
         # Если ошибок нет, то получаем номер из ответа, создаем строку из номеров и записываем в ячейку
@@ -367,7 +368,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         if phones:
             phone = ' · '.join([str(p) for p in phones])
             number_cell.value = phone
-            number_cell.style = 'active_style'
+            number_cell.style = 'success_status'
             print(f"{progress}  ✔️{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
         else:
             print(f"{progress}  ❌{DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
@@ -377,10 +378,10 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         phone = await parser.get_phone_number(offer_id)
         if phone:
             number_cell.value = phone
-            number_cell.style = 'active_style'
-            print(f"{progress}  ✔️  {LIGHT_CYAN}Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
+            number_cell.style = 'success_status'
+            print(f"{progress}  ✔️{LIGHT_CYAN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
         else:
-            print(f"{progress}  ❌  {RED}Номер не получен: {WHITE} Ошибка 2 {phone=} · {url}")
+            print(f"{progress}  ❌{RED}  Номер не получен: {WHITE} Ошибка 2 · {url}")
 
     # Сохраняем прогресс каждые N итераций
     if (n + 1) % save_every_n == 0:
