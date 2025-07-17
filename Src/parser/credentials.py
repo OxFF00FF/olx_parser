@@ -179,7 +179,7 @@ def get_access_token(authorization_code: str) -> str | None:
         logger.error(f"⚠️  Failed to get access token · {e}")
 
 
-def get_token(user='guest', show_info=None) -> str | None:
+def get_token(user='guest', exp_time_only=None, show_info=True) -> str | None:
     """
     Получает токен доступа для OLX, используя указанный профиль браузера.
 
@@ -212,20 +212,22 @@ def get_token(user='guest', show_info=None) -> str | None:
             formatted_time = f'{hours:02}:{minutes:02}:{seconds:02}'
 
             token = data.get('access_token')
-            if show_info:
+            if exp_time_only:
                 print(f"\n⌛️  Время действия токена: {LIGHT_MAGENTA}{formatted_time}{WHITE}")
                 return
             else:
                 return token
 
         else:
-            print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Обновляем")
+            if show_info:
+                print(f"\n⚠️  {YELLOW}Время действия токена истекло{WHITE} · Обновляем")
             token = update_token(data.get('refresh_token'))
             if not token:
                 token = get_access_token(get_auth_code(login_sid=get_session_id()))
 
     else:
-        print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый")
+        if show_info:
+            print(f"\n⚠️  {YELLOW}Файл с токеном не найден{WHITE} · Получаем новый")
         token = get_access_token(get_auth_code(login_sid=get_session_id()))
 
     if token:

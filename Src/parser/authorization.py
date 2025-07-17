@@ -198,9 +198,11 @@ def get_token_selenium(user_dir='guest', show_info=None) -> str | None:
         expire_ts = int(expire_date.timestamp())
         formatted_time = expire_date.strftime('%H:%M:%S')
 
-        token = f"Bearer {token}"
         save_json(dict(access_token=token, timestamp=expire_ts, time=formatted_time, date=str(expire_date)), creds_file)
-        print(f"\n⌛️  {LIGHT_GREEN}Токен получен{WHITE} · Истекает через {LIGHT_YELLOW}{minutes} мин{WHITE} в {LIGHT_MAGENTA}{formatted_time}{WHITE}")
+        if show_info:
+            print(f"\n⌛️  {LIGHT_GREEN}Токен получен{WHITE} · Истекает через {LIGHT_YELLOW}{minutes} мин{WHITE} в {LIGHT_MAGENTA}{formatted_time}{WHITE}")
+
+        token = f"Bearer {token}"
         return token
 
     except Exception as e:
