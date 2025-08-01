@@ -20,7 +20,7 @@ async def main():
     start = perf_counter()
 
     try:
-        parser = olxParser(max_workers=10, Xlsx=True)
+        parser = olxParser(Xlsx=True)
 
         banner()
         format_proxies()
@@ -38,6 +38,7 @@ async def main():
             await parser.run(region.id, city.id)
 
         elif choice == '2':
+            get_token(exp_time_only=True, show_info=False)
             choosed_filename = choose_file()
             await parser.parse_phones_from_file(choosed_filename, show_info=True)
 
