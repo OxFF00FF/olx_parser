@@ -43,8 +43,8 @@ class olxParser:
     _txt_numbers = f"🔄  Парсим номер телефонов  "
     _ascii = ' ▱▰'
 
-    def __init__(self, max_workers: int = 5, Json: bool = None, Xlsx: bool = None):
-        self._workers = max_workers
+    def __init__(self, Json: bool = None, Xlsx: bool = None):
+        self._workers = app_config.MAX_WORKERS
         self._category_url = None
 
         self._save_json = Json
@@ -107,7 +107,7 @@ class olxParser:
         price_data = next((item.get('value') for item in data.get('params') if item.get('key') == 'price'), {})
 
         offer.id = data.get('id')
-        offer.title = data.get('title')
+        offer.title = data.get('title').replace('\n', '').strip()
         offer.seller_name = data.get('contact', {}).get('name')
         offer.seller_city = data.get('location', {}).get('city', {}).get('name')
         offer.description = data.get('description', '').replace('<br />', '\n').replace('<br/>', '\n').replace('<br>', '\n')
@@ -138,37 +138,36 @@ class olxParser:
         headers = headers or self._get_headers()
         cookies = self._get_cookies()
 
-        attempt, retries, delay = 0, 5, 5
-        for _ in range(5):
+        retries, delay = 5, 5
+        for attempt in range(1, retries + 1):
             proxy = get_proxy_random()
             status, response = await get_data(url, headers, cookies, data, payload, proxy=proxy, Json=json_response, use_proxy=use_proxy)
 
             if status == 200:
-                attempt += 1
-                logger.debug(f"✔️  Request success. Status: {LIGHT_GREEN}{status}{WHITE}")
+                logger.debug(f"✔  Request success. Status: {LIGHT_GREEN}{status}{WHITE}")
                 return response
 
             elif status == 404:
-                attempt += 1
-                logger.debug(f"⚠️  [{attempt}/{retries}] Объявление не найдено или удалено. Status: {MAGENTA}{status}{WHITE}")
+                logger.debug(f"⚠  [{attempt}/{retries}] Объявление не найдено или удалено. Status: {MAGENTA}{status}{WHITE}")
                 return response if json_response else None
 
-            elif status in (400, 401):
-                attempt += 1
-                logger.debug(f"⚠️  [{attempt}/{retries}] Captcha. Status: {YELLOW}{status}{WHITE}")
+            elif status == 400:
+                logger.debug(f"⚠  [{attempt}/{retries}] Attempt failed. Status: {YELLOW}{status}{WHITE}\n{response}")
                 await asyncio.sleep(delay)
 
+            elif status == 401:
+                logger.debug(f"⚠  [{attempt}/{retries}] Token expired. Status: {YELLOW}{status}{WHITE}\n{response}")
+                get_token()
+
             elif status == 500:
-                attempt += 1
                 if '407' in response:
-                    logger.error(f"⚠️  [{attempt}/{retries}] Неверные данные для авторизации прокси. Status {MAGENTA}{status}{WHITE} · {response.split('See')[0]}")
+                    logger.error(f"⚠  [{attempt}/{retries}] Неверные данные для авторизации прокси. Status {MAGENTA}{status}{WHITE} · {response.split('See')[0]}")
 
                 if attempt == 5:
-                    logger.error(f"⚠️  [{attempt}/{retries}] Не удалсоь выполнить запрос. Status: {RED}{status}{WHITE} · {response.split('See')[0]}")
+                    logger.error(f"⚠  [{attempt}/{retries}] Не удалсоь выполнить запрос. Status: {RED}{status}{WHITE} · {response.split('See')[0]}")
                 await asyncio.sleep(delay)
 
             else:
-                attempt += 1
                 try:
                     offer_id = url.strip('/').split('/')[-2]
                     offer_url = f"https://www.olx.ua/{offer_id}"
@@ -228,7 +227,7 @@ class olxParser:
 
         url = str(URL('https://www.olx.ua/api/v1/offers/metadata/search/').with_query(params))
         response = await self._make_request(url, headers, json_response=True)
-        data = response.get('data', {})
+        data = response.get('data', [])
 
         regions = [
             Region(id=item.get('id'), count=item.get('count'), name=item.get('label'), url=f"https://www.olx.ua/{item.get('url').strip('/')}")
@@ -312,43 +311,36 @@ class olxParser:
         next_page = response.get('links', {}).get('next', {}).get('href')
         return offers, next_page
 
-    async def get_phone_number(self, ad_id: OfferID, response_only: bool = None) -> str | dict | None:
+    async def get_phone_number(self, ad_id: OfferID, response_only: bool = None) -> str | dict | Exception:
         """
         Асинхронно получает номера телефонов для объявления по его ID через API.
-
-        Формирует запрос с необходимыми заголовками, включая токен авторизации.
-        При ошибке пытается обновить токен и повторить запрос.
-        Если `response_only` установлен, возвращает полный JSON-ответ, иначе — объединённые номера телефонов в строку.
-
-        :param ad_id: Идентификатор объявления.
-        :param response_only: Если True — возвращает полный ответ API вместо строкового номера.
-
-        :return: Строка с номерами телефонов через " · ", или словарь с данными ответа, или None при ошибке.
+        Автоматически обновляет токен, если он устарел.
         """
-        headers = {
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-            'authorization': get_token(),
-            'cache-control': 'no-cache',
-            'pragma': 'no-cache',
-            'priority': 'u=0, i',
-            'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'sec-fetch-user': '?1',
-            'upgrade-insecure-requests': '1',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-        }
-
         phones = []
         url = f'{self.__base_url}/api/v1/offers/{ad_id}/limited-phones/'
 
         try:
             async with self._semaphore:
+                headers = {
+                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                    'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'authorization': get_token(),
+                    'cache-control': 'no-cache',
+                    'pragma': 'no-cache',
+                    'priority': 'u=0, i',
+                    'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                    'sec-fetch-dest': 'document',
+                    'sec-fetch-mode': 'navigate',
+                    'sec-fetch-site': 'none',
+                    'sec-fetch-user': '?1',
+                    'upgrade-insecure-requests': '1',
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+                }
+
                 data = await self._make_request(url, headers, json_response=True, use_proxy=True)
+
                 if response_only:
                     return data
 
@@ -356,8 +348,9 @@ class olxParser:
                     error = data.get('error', {})
                     error_detail = error.get('detail')
 
-                    if error == 'invalid_token' or error_detail == 'Disallowed for this user':
-                        headers['authorization'] = get_token()
+                    if error_detail in ['invalid_token', 'Disallowed for this user']:
+                        # Повторный запрос с новым токеном
+                        headers['authorization'] = get_token(show_info=False)
                         data_2 = await self._make_request(url, headers, json_response=True, use_proxy=True)
                         phones = data_2.get('data', {}).get('phones', [])
 
@@ -369,9 +362,9 @@ class olxParser:
 
                 return ' · '.join([str(p) for p in phones]) if phones else ''
 
-        except:
+        except Exception as e:
             logger.debug(f"⚠️  Failed to get phone_numbers: {self.__api_offers_url}/{ad_id}")
-            return None
+            return e
 
     async def get_items_count_for_all_categories(self, region_id: int = None, city_id: int = None, region_name: str = None, city_name: str = None, sorting_by: str = 'id') -> list[Category]:
         """
@@ -398,7 +391,7 @@ class olxParser:
 
         if self._save_json:
             save_json(data, os.path.join(self.out_dir, f'{region_id}_{region_name}_{city_name}__categories.json'))
-        return [Category(item['id'], None, item['count'], 0) for item in categories]
+        return [Category(item.get('id'), None, item.get('count'), 0) for item in categories]
 
     async def get_categories(self) -> list[Category]:
         """
@@ -588,7 +581,7 @@ class olxParser:
             in range(total_pages)
         ]
 
-        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=self._ascii)
+        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, leave=False, ascii=self._ascii)
         for response in results:
             html = self._get_html(response)
             data = self._find_json(html)
@@ -641,7 +634,7 @@ class olxParser:
             for url
             in page_urls
         ]
-        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, dynamic_ncols=True, leave=False, ascii=self._ascii)
+        results = await tqdm_asyncio.gather(*tasks, desc=self._txt_all_offers, bar_format=self._bar, ncols=self._cols, leave=False, ascii=self._ascii)
 
         for response in results:
             all_offers_raw.extend(response.get('data', {}))
@@ -740,7 +733,7 @@ class olxParser:
             indexes["region"] = 0  # сбрасываем прогресс, чтобы начать с начала выбранного региона
 
         for n_region, region in enumerate(regions):
-            logger.debug(f"🏷  repr(region)")
+            logger.debug(f"🏷  {repr(region)}")
 
             if n_region < indexes["region"]:
                 continue  # Пропускаем уже обработанные регионы
@@ -772,7 +765,7 @@ class olxParser:
                 else:
                     print(help_message)
                     for n_category, category in enumerate(categories):
-                        logger.debug(f"🏷  repr(category)")
+                        logger.debug(f"🏷  {repr(category)}")
 
                         if n_region == indexes["region"] and n_city == indexes["city"] and n_category < indexes["category"]:
                             continue  # Пропускаем уже обработанные категории

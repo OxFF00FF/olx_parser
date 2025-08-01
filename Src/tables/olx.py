@@ -10,6 +10,7 @@ from yaspin import yaspin
 
 from Src.app.colors import *
 from Src.app.logging_config import logger
+from Src.parser.credentials import get_token
 from Src.parser.schemas import Offer
 from Src.parser.utils import validate_filename, clickable_file_link
 
@@ -158,7 +159,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
 
     xlsx_files = [f for f in os.listdir(xlsx_path) if f.endswith('xlsx')]
 
-    progress_bar = tqdm(xlsx_files, bar_format=bar, dynamic_ncols=True, leave=False, ascii=' ▱▰')
+    progress_bar = tqdm(xlsx_files, bar_format=bar, ncols=150, leave=False, ascii=' ▱▰')
 
     for filename in progress_bar:
         file_path = os.path.join(xlsx_path, filename)
@@ -202,7 +203,7 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
     print("🔄  Форматирование строк")
 
     total_rows = output_ws.max_row - 1
-    for row in tqdm(output_ws.iter_rows(min_row=2, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", bar_format=bar, dynamic_ncols=True, leave=False, ascii=' ▱▰'):
+    for row in tqdm(output_ws.iter_rows(min_row=2, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", bar_format=bar, ncols=150, leave=False, ascii=' ▱▰'):
         for col_idx, cell in enumerate(row, 1):
             val_str = str(cell.value) if cell.value is not None else ''
             cell.alignment = Alignment(horizontal='left')
@@ -291,7 +292,7 @@ def save_offers(content: list[Offer], region_id, region_name, city_id, city_name
         save_offers_excel(content, os.path.join(file_path, f'{filename}.xlsx'), show_info=False)
 
 
-async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_every_n=10):
+async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_every_n=20):
     """
     Обрабатывает ячейку таблицы.
     Получает ячейку с данными об объявлении, потом получает номер телефона с OLX, и записывает телефон обратно в ячейку
@@ -309,7 +310,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     """
     async with lock:
         counter['value'] += 1
-        progress = f"[{LIGHT_YELLOW}{counter['value']}{WHITE} / {LIGHT_BLUE}{total}{WHITE}]"
+        progress = f"[{counter['value']} / {total}]"
 
     offer_id = item[0]
     url = item[10]
@@ -321,7 +322,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     if number_cell.value == 'False':
         number_cell.value = 'не указан'
         number_cell.style = 'not_specified_status'
-        print(f"{progress}  ℹ️{DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
+        print(f"{progress}  ℹ  {DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
         return
 
     if number_cell.value == 'не указан':
@@ -337,10 +338,10 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         return
 
     response = await parser.get_phone_number(offer_id, response_only=True)
-    if response is None:
+    if isinstance(response, Exception):
         number_cell.value = 'ошибка'
         number_cell.style = 'error_status'
-        print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}Ошибка при получении номера · {url}")
+        print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}Ошибка при получении номера: {response} · {url}")
         return
     if response == {}:
         number_cell.value = 'Captcha'
@@ -371,7 +372,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
             if phone:
                 number_cell.value = phone
                 number_cell.style = 'success_status'
-                print(f"{progress}  ✔️{GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
+                print(f"{progress}  ✔{GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
             else:
                 print(f"{progress}  ❌{RED}  Номер не получен: {WHITE} Ошибка 1 · {url}")
 
@@ -383,7 +384,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
             phone = ' · '.join([str(p) for p in phones])
             number_cell.value = phone
             number_cell.style = 'success_status'
-            print(f"{progress}  ✔️{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
+            print(f"{progress}  ✔{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
         else:
             print(f"{progress}  ❌{DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
 
@@ -393,7 +394,7 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         if phone:
             number_cell.value = phone
             number_cell.style = 'success_status'
-            print(f"{progress}  ✔️{LIGHT_CYAN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
+            print(f"{progress}  ✔{LIGHT_CYAN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
         else:
             print(f"{progress}  ❌{RED}  Номер не получен: {WHITE} Ошибка 2 · {url}")
 
@@ -401,3 +402,4 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     if (n + 1) % save_every_n == 0:
         async with lock:
             wb.save(wb_path)
+        get_token(exp_time_only=True)
