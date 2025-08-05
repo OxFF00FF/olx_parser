@@ -311,6 +311,14 @@ class olxParser:
         next_page = response.get('links', {}).get('next', {}).get('href')
         return offers, next_page
 
+    def merge_parsed_files(self, xsls_files: list[str]):
+        parts = xsls_files[0].split('\\')
+
+        region_name, region_id = parts[0].split('_')[0], int(parts[0].split('_')[1])
+        city_name, city_id = parts[1].split('_')[0], int(parts[1].split('_')[1])
+
+        merge_city_offers(self._bar, self.data_dir, region_name, region_id, city_name, city_id, force=True)
+
     async def get_phone_number(self, ad_id: OfferID, response_only: bool = None) -> str | dict | Exception:
         """
         Асинхронно получает номера телефонов для объявления по его ID через API.
@@ -752,6 +760,7 @@ class olxParser:
                     continue  # Пропускаем уже обработанные города
 
                 print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  Город:   {LIGHT_YELLOW}{city.name.ljust(20)}{WHITE}  🆔  {city.id}", end="")
+                print()
 
                 categories = await self.get_items_count_for_all_categories(region.id, city.id, region.name, city.name)
 
@@ -789,7 +798,7 @@ class olxParser:
                     print(help_message.strip())
                     time.sleep(1)
                     print(f"✅  Сбор объявлений по всем категориям в {LIGHT_YELLOW}{region.name}{WHITE} города {LIGHT_YELLOW}{city.name}{WHITE} завершен")
-                    merge_city_offers(self.data_dir, region.name, region.id, city.name, city.id, self._bar)
+                    merge_city_offers(self._bar, self.data_dir, region.name, region.id, city.name, city.id)
 
                 break
 
