@@ -23,16 +23,18 @@ def main_menu():
     if token:
         print(f'╭───────  ГЛАВНОЕ МЕНЮ  ─────────╮ \n'
               f'1.  {LIGHT_YELLOW}Собрать объявления {LIGHT_BLUE}региона{WHITE} \n'
-              f'2.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_CYAN}файла{WHITE} \n'
-              f'3.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_MAGENTA}города{WHITE} \n'
+              f'2.  {LIGHT_YELLOW}Собрать номера из {LIGHT_CYAN}файла{WHITE} \n'
+              f'3.  {LIGHT_YELLOW}Собрать номера из {LIGHT_MAGENTA}города{WHITE} \n'
+              f'4.  {LIGHT_YELLOW}Объединить файлы {LIGHT_MAGENTA}города{WHITE} \n'
               f'    {session} \n'
               f'╰────────────────────────────────╯ \n')
     else:
         print(f'╭───────  ГЛАВНОЕ МЕНЮ  ─────────╮ \n'
               f'1.  {LIGHT_YELLOW}Собрать объявления {LIGHT_BLUE}региона{WHITE} \n'
               f'2.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_CYAN}файла{WHITE} \n'
-              f'3.  {LIGHT_YELLOW}Собрать номера из  {LIGHT_MAGENTA}города{WHITE} \n'
-              f'4.  {LIGHT_YELLOW}Войти в аккаунт{WHITE} \n'
+              f'3.  {LIGHT_YELLOW}Собрать номера из {LIGHT_MAGENTA}города{WHITE} \n'
+              f'4.  {LIGHT_YELLOW}ОБъединить файлы {LIGHT_MAGENTA}города{WHITE} \n'
+              f'5.  {LIGHT_YELLOW}Войти в аккаунт{WHITE} \n'
               f'╰────────────────────────────────╯ \n')
 
 
@@ -124,7 +126,7 @@ def choose_parsed_city():
     data_dir = 'data'
 
     os.system("cls")
-    parsed_regions = [name for name in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, name)) and name != 'profiles']
+    parsed_regions = [name for name in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, name)) and '_' in name]
     print('\n╭───────  ПОЛУЧЕННЫЕ РЕГИОНЫ  ───────╮ ')
     for n, region in enumerate(parsed_regions):
         region_name, region_id = region.split('_')
@@ -163,7 +165,7 @@ def choose_parsed_city():
         ]
 
 
-async def authorize():
+def authorize():
     sid = get_session_id()
     if sid:
         auth_code = get_auth_code(login_sid=sid)
