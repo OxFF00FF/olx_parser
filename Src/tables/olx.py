@@ -1,6 +1,7 @@
 import asyncio
 import os
 import time
+from copy import copy
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, NamedStyle, PatternFill
@@ -12,7 +13,7 @@ from Src.app.colors import *
 from Src.app.logging_config import logger
 from Src.parser.credentials import get_token
 from Src.parser.schemas import Offer
-from Src.parser.utils import validate_filename, clickable_file_link
+from Src.parser.utils import validate_filename, clickable_file_link, save_json
 
 lock = asyncio.Lock()
 
@@ -28,6 +29,64 @@ success_status = NamedStyle(name="success_status", fill=green_fill, alignment=Al
 error_status = NamedStyle(name="error_status", fill=orange_fill, alignment=Alignment(horizontal='center'))
 hidden_status = NamedStyle(name="hidden_status", fill=lavender_fill, alignment=Alignment(horizontal='center'))
 not_specified_status = NamedStyle(name="not_specified_status", fill=gray_fill, alignment=Alignment(horizontal='center'))
+
+
+def copy_cell(source_cell, target_cell):
+    target_cell.value = source_cell.value
+    target_cell.font = copy(source_cell.font)
+    target_cell.fill = copy(source_cell.fill)
+    target_cell.border = copy(source_cell.border)
+    target_cell.alignment = copy(source_cell.alignment)
+    target_cell.number_format = source_cell.number_format
+
+
+def register_styles(wb: Workbook):
+    """
+    Регистрирует пользовательские стили в рабочей книге Excel, если они ещё не добавлены.
+
+    Проверяет наличие каждого стиля в списке зарегистрированных именованных стилей рабочей книги `wb`.
+    Если стиль отсутствует, добавляет его в рабочую книгу.
+
+    :param wb: Объект рабочей книги Excel (`openpyxl.Workbook`), в которую нужно добавить стили.
+    """
+
+    def add_style(style):
+        if style.name not in wb.named_styles:
+            wb.add_named_style(style)
+
+    add_style(success_status)
+    add_style(error_status)
+    add_style(hidden_status)
+    add_style(not_specified_status)
+
+
+def save_offers(content: list[Offer], region_id, region_name, city_id, city_name, category_id, category_name, out_dir, save_to_json, save_xls):
+    """
+    Сохраняет список предложений (`Offer`) в указанные форматы (JSON и/или Excel) по заданной иерархии директорий.
+
+    Формирует имя файла на основе ID и названия категории, создает директорию с учетом региона и города,
+    а затем сохраняет данные в формате JSON и/или XLSX, если соответствующие флаги активированы.
+
+    :param content: Список предложений для сохранения.
+    :param region_id: Идентификатор региона.
+    :param region_name: Название региона.
+    :param city_id: Идентификатор города.
+    :param city_name: Название города.
+    :param category_id: Идентификатор категории.
+    :param category_name: Название категории.
+    :param out_dir: Базовая директория для сохранения файлов.
+    :param save_to_json: Флаг, указывающий, нужно ли сохранять данные в формате JSON.
+    :param save_xls: Флаг, указывающий, нужно ли сохранять данные в формате XLSX.
+    """
+    filename = validate_filename(f'{region_id}_{city_id}_{category_id}_{category_name}__offers({len(content)})')
+    file_path = os.path.join(out_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
+    os.makedirs(file_path, exist_ok=True)
+
+    if save_to_json:
+        save_json([item.model_dump() for item in content], os.path.join(out_dir, f'{filename}.json'))
+
+    if save_xls:
+        save_offers_excel(content, os.path.join(file_path, f'{filename}.xlsx'), show_info=False)
 
 
 def save_offers_excel(content: list[Offer], filepath: str, show_info: bool = True):
@@ -56,6 +115,14 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info: bool = Tru
         'url': 'Ссылка',
     }
 
+    unique_offers_by_id = []
+    seen_ids = set()
+
+    for offer in content:
+        if offer.id not in seen_ids:
+            unique_offers_by_id.append(offer)
+            seen_ids.add(offer.id)
+
     # Добавление заголовков
     headers = [column_mapping[key] for key in column_mapping.keys()]
 
@@ -75,16 +142,8 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info: bool = Tru
     # Словарь для расчета ширины колонок
     column_widths = {i: len(headers[i - 1]) + 2 for i in range(1, len(headers) + 1)}
 
-    unique_offers_by_id = []
-    seen_ids = set()
-
-    for offer in content:
-        if offer.id not in seen_ids:
-            unique_offers_by_id.append(offer)
-            seen_ids.add(offer.id)
-
     for offer in unique_offers_by_id:
-        logger.debug(f"📦  {repr(offer)}")
+        # logger.debug(f"📦  {repr(offer)}")
 
         row = [
             offer.id,
@@ -130,25 +189,9 @@ def save_offers_excel(content: list[Offer], filepath: str, show_info: bool = Tru
         logger.error(f"Не удалось сохранить EXCEL файл: {e}")
 
 
-def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name: str, city_id: int, bar: str):
-    """
-    Объединяет все XLSX-файлы одного города в один Excel-файл с форматированием и гиперссылками.
-
-    Проходит по всем Excel-файлам указанного города, считывает данные, объединяет их в одну итоговую таблицу,
-    добавляет гиперссылки на объявления и применяет форматирование. Итоговый файл сохраняется в директорию `data_dir`.
-
-    :param data_dir: Базовая директория, содержащая XLSX-файлы по регионам и городам.
-    :param region_name: Название региона.
-    :param region_id: Идентификатор региона.
-    :param city_name: Название города.
-    :param city_id: Идентификатор города.
-    :param bar: Строка формата для отображения прогресс-бара (используется в tqdm).
-    """
+def merge_city_offers(bar: str, data_dir: str = None, region_name: str = None, region_id: int = None, city_name: str = None, city_id: int = None, force=None):
     print("🔄  Объединение таблиц")
     time.sleep(1)
-
-    xlsx_path = os.path.join(data_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
-    save_path = os.path.join(data_dir, f"merged_{region_name}_{region_id}__{city_name}_{city_id}.xlsx")
 
     merged_wb = Workbook()
     output_ws = merged_wb.active
@@ -157,8 +200,10 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
     column_widths = {}
     seen_ids = set()
 
-    xlsx_files = [f for f in os.listdir(xlsx_path) if f.endswith('xlsx')]
+    xlsx_path = os.path.join(data_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
+    save_path = os.path.join(data_dir, f"{'force_merged' if force else 'merged'}_{region_name}_{region_id}__{city_name}_{city_id}.xlsx")
 
+    xlsx_files = [f for f in os.listdir(xlsx_path) if f.endswith('xlsx')]
     progress_bar = tqdm(xlsx_files, bar_format=bar, ncols=150, leave=False, ascii=' ▱▰')
 
     for filename in progress_bar:
@@ -167,30 +212,45 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
 
         processed_wb = load_workbook(file_path)
         processed_ws = processed_wb.active
-        rows = list(processed_ws.iter_rows(values_only=True))
 
+        rows = list(processed_ws.iter_rows()) if force else list(processed_ws.iter_rows(values_only=True))
         if not rows:
             continue
 
-        # Запись заголовка с форматированием
+        # Заголовок
         if not header_written:
-            output_ws.append(rows[0])
-            for col_num, header in enumerate(rows[0], 1):
-                cell = output_ws.cell(row=1, column=col_num)
-                cell.font = Font(bold=True)
-                cell.alignment = Alignment(horizontal='center')
-                column_widths[col_num] = len(str(header)) + 2
+            if force:
+                for col_idx, cell in enumerate(rows[0], 1):
+                    target_cell = output_ws.cell(row=1, column=col_idx)
+                    copy_cell(cell, target_cell)
+                    target_cell.font = Font(bold=True)
+                    target_cell.alignment = Alignment(horizontal='center')
+                    column_widths[col_idx] = len(str(cell.value)) + 2
+            else:
+                output_ws.append(rows[0])
+                for col_idx, header in enumerate(rows[0], 1):
+                    cell = output_ws.cell(row=1, column=col_idx)
+                    cell.font = Font(bold=True)
+                    cell.alignment = Alignment(horizontal='center')
+                    column_widths[col_idx] = len(str(header)) + 2
             header_written = True
             data_rows = rows[1:]
         else:
             data_rows = rows[1:]
 
         for row in data_rows:
-            offer_id = row[0]
+            offer_id = row[0].value if force else row[0]
             if offer_id in seen_ids:
                 continue
             seen_ids.add(offer_id)
-            output_ws.append(row)
+
+            if force:
+                target_row = output_ws.max_row + 1
+                for col_idx, source_cell in enumerate(row, 1):
+                    target_cell = output_ws.cell(row=target_row, column=col_idx)
+                    copy_cell(source_cell, target_cell)
+            else:
+                output_ws.append(row)
 
     print("\r✅  Объединение завершено", end="", flush=True)
     time.sleep(1)
@@ -203,7 +263,8 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
     print("🔄  Форматирование строк")
 
     total_rows = output_ws.max_row - 1
-    for row in tqdm(output_ws.iter_rows(min_row=2, max_row=output_ws.max_row), total=total_rows, desc="🔄  Форматирование строк", bar_format=bar, ncols=150, leave=False, ascii=' ▱▰'):
+    rows = output_ws.iter_rows(min_row=2, max_row=output_ws.max_row)
+    for row in tqdm(rows, total=total_rows, desc="🔄  Форматирование строк", bar_format=bar, ncols=150, leave=False, ascii=' ▱▰'):
         for col_idx, cell in enumerate(row, 1):
             val_str = str(cell.value) if cell.value is not None else ''
             cell.alignment = Alignment(horizontal='left')
@@ -212,13 +273,12 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
         # Добавление ссылок
         if len(row) >= 11:
             title_cell = row[1]  # 2-я колонка - Название
-            url_cell = row[10]  # 11-я колонка - URL
+            url_cell = row[10]   # 11-я колонка - URL
             offer_url = str(url_cell.value)
 
             if offer_url:
                 title_cell.value = f'=HYPERLINK("{offer_url}", "{title_cell.value}")'
                 title_cell.font = hlink_style
-
                 url_cell.hyperlink = offer_url
                 url_cell.font = hlink_style
 
@@ -241,55 +301,6 @@ def merge_city_offers(data_dir: str, region_name: str, region_id: int, city_name
 
     except PermissionError as e:
         logger.error(f"Не удалось сохранить EXCEL файл: {e}")
-
-
-def register_styles(wb: Workbook):
-    """
-    Регистрирует пользовательские стили в рабочей книге Excel, если они ещё не добавлены.
-
-    Проверяет наличие каждого стиля в списке зарегистрированных именованных стилей рабочей книги `wb`.
-    Если стиль отсутствует, добавляет его в рабочую книгу.
-
-    :param wb: Объект рабочей книги Excel (`openpyxl.Workbook`), в которую нужно добавить стили.
-    """
-
-    def add_style(style):
-        if style.name not in wb.named_styles:
-            wb.add_named_style(style)
-
-    add_style(success_status)
-    add_style(error_status)
-    add_style(hidden_status)
-    add_style(not_specified_status)
-
-
-def save_offers(content: list[Offer], region_id, region_name, city_id, city_name, category_id, category_name, out_dir, save_json, save_xls):
-    """
-    Сохраняет список предложений (`Offer`) в указанные форматы (JSON и/или Excel) по заданной иерархии директорий.
-
-    Формирует имя файла на основе ID и названия категории, создает директорию с учетом региона и города,
-    а затем сохраняет данные в формате JSON и/или XLSX, если соответствующие флаги активированы.
-
-    :param content: Список предложений для сохранения.
-    :param region_id: Идентификатор региона.
-    :param region_name: Название региона.
-    :param city_id: Идентификатор города.
-    :param city_name: Название города.
-    :param category_id: Идентификатор категории.
-    :param category_name: Название категории.
-    :param out_dir: Базовая директория для сохранения файлов.
-    :param save_json: Флаг, указывающий, нужно ли сохранять данные в формате JSON.
-    :param save_xls: Флаг, указывающий, нужно ли сохранять данные в формате XLSX.
-    """
-    filename = validate_filename(f'{region_id}_{city_id}_{category_id}_{category_name}__offers({len(content)})')
-    file_path = os.path.join(out_dir, f"{region_name.replace(' ', '-')}_{region_id}", f"{city_name}_{city_id}")
-    os.makedirs(file_path, exist_ok=True)
-
-    if save_json:
-        save_json([item.model_dump() for item in content], os.path.join(out_dir, f'{filename}.json'))
-
-    if save_xls:
-        save_offers_excel(content, os.path.join(file_path, f'{filename}.xlsx'), show_info=False)
 
 
 async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_every_n=20):
