@@ -26,7 +26,7 @@ async def main():
         format_proxies()
         main_menu()
 
-        choice = input(f'{CYAN}▶️  Выберите действие ({WHITE}{BOLD}1/2/3{RESET}{CYAN}): {WHITE}')
+        choice = input(f'{CYAN}▶️Выберите действие ({WHITE}{BOLD}1/2/3/4{RESET}{CYAN}): {WHITE}')
         if choice == '1':
             # Выбор регоина
             region = await choose_region(parser)
@@ -56,7 +56,11 @@ async def main():
             print(f"✔️  Все файлы в обработаны")
 
         elif choice == '4':
-            await authorize()
+            parsed_files = choose_parsed_city()
+            parser.merge_parsed_files(parsed_files)
+
+        elif choice == '5':
+            authorize()
 
         else:
             print(f"❌  Такой опции нет: {LIGHT_RED}{choice}{WHITE} \n")
