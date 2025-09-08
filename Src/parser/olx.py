@@ -153,7 +153,7 @@ class olxParser:
 
             elif status == 400:
                 logger.debug(f"⚠  [{attempt}/{retries}] Attempt failed. Status: {YELLOW}{status}{WHITE}\n{response}")
-                await asyncio.sleep(delay)
+                return response if json_response else {}
 
             elif status == 401:
                 logger.debug(f"⚠  [{attempt}/{retries}] Token expired. Status: {YELLOW}{status}{WHITE}\n{response}")
@@ -198,7 +198,7 @@ class olxParser:
             data = json.loads(json.loads(match.group(1)))
             return data.get('listing', {}).get('listing', {}).get('totalPages', 0)
 
-    async def _get_offers_count(self, category_id: int, region_id: int = None, city_id: int = None, facet_field: str = 'region') -> OffersMeta:
+    async def _get_offers_count(self, category_id: int, region_id: int = None, city_id: int = None, facet_field: str = 'region') -> OffersMeta | None:
         """
         Получает общее, видимое и количество объявлений в регионах по ID Категории. И дополнительно по ID Региона и ID Города
 
@@ -227,12 +227,19 @@ class olxParser:
 
         url = str(URL('https://www.olx.ua/api/v1/offers/metadata/search/').with_query(params))
         response = await self._make_request(url, headers, json_response=True)
-        data = response.get('data', [])
 
+        if 'error' in response:
+            error = response.get('error', {})
+            detail = error.get('detail')
+            error_desc = response.get('error', {}).get('validation', '')
+            print(f"⚠️  🆔  {category_id} · Не удалось найти количество объявлений. {detail} · {error_desc}")
+            return None
+
+        data = response.get('data', {})
         regions = [
             Region(id=item.get('id'), count=item.get('count'), name=item.get('label'), url=f"https://www.olx.ua/{item.get('url').strip('/')}")
             for item
-            in data.get('facets', []).get(facet_field, [])
+            in data.get('facets', {}).get(facet_field, [])
         ]
 
         if self._save_json:
@@ -672,12 +679,11 @@ class olxParser:
         wb_path = os.path.join(self.data_dir, filename)
 
         # Открываем файл и делаем первую страницу активной
-        with yaspin(text="Чтение") as spinner:
+        with yaspin(text="Чтение файла") as spinner:
             wb = load_workbook(wb_path)
             ws = wb.active
-            if show_info:
-                spinner.text = 'Готово'
-                spinner.ok('✔️')
+            time.sleep(1)
+            spinner.stop()
 
         # Добавляем стили ячеек в книгу
         register_styles(wb)
@@ -697,9 +703,8 @@ class olxParser:
 
         with yaspin(text="Сохранение") as spinner:
             wb.save(wb_path)
-            if show_info:
-                spinner.text = 'Сохранено'
-                spinner.ok('✔️')
+            time.sleep(1)
+            spinner.stop()
 
             completed_wb_path = os.path.join(os.path.dirname(wb_path), f"+ {os.path.basename(wb_path)}")
             os.rename(wb_path, completed_wb_path)
@@ -719,7 +724,7 @@ class olxParser:
         :param region_id: (необязательно) Идентификатор региона для обработки.
         :param city_id: (необязательно) Идентификатор города для обработки.
         """
-        help_message = f"\n{'─' * 30}| 📰  {BOLD}{LIGHT_MAGENTA}Найдено{RESET} / 📚  {BOLD}{LIGHT_CYAN}Страниц{RESET} / 📥  {BOLD}{RED}Собрано{RESET}{WHITE} / 📦  Всего собрано |{'─' * 30}"
+        help_message = f"{'─' * 30}| 📰  {BOLD}{LIGHT_MAGENTA}Найдено{RESET} / 📚  {BOLD}{LIGHT_CYAN}Страниц{RESET} / 📥  {BOLD}{RED}Собрано{RESET}{WHITE} / 📦  Всего собрано |{'─' * 30}"
 
         os.system('cls')
         logger.info('ℹ️  Начинается сбор объявлений для выбранного региона и города')
@@ -746,12 +751,16 @@ class olxParser:
             if n_region < indexes["region"]:
                 continue  # Пропускаем уже обработанные регионы
 
-            print(f"\n{LIGHT_BLUE}[{n_region + 1} / {len(regions)}]{WHITE} |  Регион:  {LIGHT_YELLOW}{region.name.ljust(20)}{WHITE}  🆔  {region.id}")
+            print(f"\n[{LIGHT_BLUE}{n_region + 1} / {len(regions)}{WHITE}] |  Регион:  {LIGHT_YELLOW}{region.name.ljust(20)}{WHITE}  🆔  {region.id}")
 
             cities = await self.get_cities(region)
             if city_id is not None:
                 cities = [c for c in cities if c.id == city_id]
                 indexes["city"] = 0  # сбрасываем прогресс по городам, чтобы начать с начала выбранного города
+
+            if not cities:
+                print(f"❌  Не найден город с ID {city_id}")
+                break
 
             for n_city, city in enumerate(cities):
                 logger.debug(f"🏷  {repr(city)}")
@@ -759,7 +768,7 @@ class olxParser:
                 if n_region == indexes["region"] and n_city < indexes["city"]:
                     continue  # Пропускаем уже обработанные города
 
-                print(f"{LIGHT_BLUE}[{n_city + 1} / {len(cities)}]{WHITE} |  Город:   {LIGHT_YELLOW}{city.name.ljust(20)}{WHITE}  🆔  {city.id}", end="")
+                print(f"[{LIGHT_BLUE}{n_city + 1} / {len(cities)}{WHITE}] |  Город:   {LIGHT_YELLOW}{city.name.ljust(20)}{WHITE}  🆔  {city.id}", end="")
                 print()
 
                 categories = await self.get_items_count_for_all_categories(region.id, city.id, region.name, city.name)
@@ -772,7 +781,7 @@ class olxParser:
                     os.execl(sys.executable, sys.executable, *sys.argv)
                     exit()
                 else:
-                    print(help_message)
+                    print(f"\n╭{help_message}╮")
                     for n_category, category in enumerate(categories):
                         logger.debug(f"🏷  {repr(category)}")
 
@@ -784,18 +793,21 @@ class olxParser:
                         save_offers(offers, region_id, region.name, city.id, city.name, category.id, category_name, self.out_dir, self._save_json, self._save_xls)
 
                         offers_count = await self._get_offers_count(category.id, region.id, city.id)
+                        if not offers_count:
+                            continue
+
                         total_pages = (offers_count.visible_total + limit - 1) // limit
                         max_offers = offers_count.visible_total
 
                         total_collected += max_offers
-                        print(f"{LIGHT_BLUE}[{n_category + 1} / {len(categories)}]{WHITE} |   🆔  {category.id} · {YELLOW}{category_name[:70].ljust(70)}{WHITE} | "
+                        print(f"[{LIGHT_BLUE}{n_category + 1} / {len(categories)}{WHITE}] |   🆔  {category.id} · {YELLOW}{category_name[:70].ljust(70)}{WHITE} | "
                               f"📰  {BOLD}{LIGHT_MAGENTA}{offers_count.total}{RESET} / "
                               f"📚  {BOLD}{LIGHT_CYAN}{total_pages}{RESET}{WHITE} / "
                               f"📥  {BOLD}{RED}{max_offers}{RESET}{WHITE} / "
                               f"📦  {total_collected}")
                         save_json({"region": n_region, "city": n_city, "category": n_category + 1}, indexes_path)
 
-                    print(help_message.strip())
+                    print(f"╰{help_message}╯")
                     time.sleep(1)
                     print(f"✅  Сбор объявлений по всем категориям в {LIGHT_YELLOW}{region.name}{WHITE} города {LIGHT_YELLOW}{city.name}{WHITE} завершен")
                     merge_city_offers(self._bar, self.data_dir, region.name, region.id, city.name, city.id)
