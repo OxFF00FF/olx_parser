@@ -2,14 +2,13 @@ import itertools
 import json
 import os
 import random
+from datetime import datetime
 from typing import Callable
 
 from curl_cffi import AsyncSession
-from datetime import datetime
 from pyfiglet import figlet_format, parse_color
 
 from Src.app.colors import *
-from Src.app.config import app_config
 from Src.app.logging_config import logger
 
 proxies_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.join(__file__)))), 'proxies.txt')
@@ -150,8 +149,7 @@ def get_figlet_text(text, font=None, colors=":", **kwargs):
     return figlet_text
 
 
-def create_banner(words_and_colors, show=False):
-    # Список, который будет содержать строки для каждого текста, с добавленными цветами.
+def create_banner(words_and_colors, version=None, show=False):
     lines = []
     result = ""
 
@@ -161,17 +159,17 @@ def create_banner(words_and_colors, show=False):
 
         # Разделение арта на список линий
         word_lines = ascii_art_word.splitlines()
+        lines.append([color + word_line for word_line in word_lines])
 
-        # Красим каждую линию и добавляем в список
-        lines.append([
-            color + word_line
-            for word_line
-            in word_lines
-        ])
-
-    # Объединяем каждую строку из каждой группы (из разных артов) в одну строку
+    # Склеиваем построчно
     for line_group in zip(*lines):
         result += "  ".join(line_group) + "\n"
+
+    # Добавляем версию к последней строке
+    if version:
+        result_lines = result.splitlines()
+        result_lines[-1] += f"{WHITE}{version}\n"
+        result = "\n".join(result_lines)
 
     if show:
         print(f"\n{result}{WHITE}")

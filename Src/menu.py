@@ -9,11 +9,13 @@ from Src.parser.credentials import get_auth_code, get_access_token, get_token
 from Src.parser.utils import create_banner
 
 
-def banner():
+def banner(v):
     os.system("cls")
     # standard, slant, pepper, cybermedium, ansi_shadow
-    create_banner([['olx', LIGHT_CYAN, 'ansi_shadow'],
-                   ['parser', WHITE, 'standard']], show=True)
+    create_banner([
+        ['olx', LIGHT_CYAN, 'ansi_shadow'],
+        ['parser', WHITE, 'standard']
+    ], version=v, show=True)
 
 
 def main_menu():
@@ -23,10 +25,11 @@ def main_menu():
     if token:
         print(f'╭───────  ГЛАВНОЕ МЕНЮ  ─────────╮ \n'
               f'1.  {LIGHT_YELLOW}Собрать объявления {LIGHT_BLUE}региона{WHITE} \n'
-              f'2.  {LIGHT_YELLOW}Собрать номера из {LIGHT_CYAN}файла{WHITE} \n'
-              f'3.  {LIGHT_YELLOW}Собрать номера из {LIGHT_MAGENTA}города{WHITE} \n'
-              f'4.  {LIGHT_YELLOW}Объединить файлы {LIGHT_MAGENTA}города{WHITE} \n'
+              f'2.  {LIGHT_YELLOW}Собрать номера из {LIGHT_CYAN} файла{WHITE} \n'
+              f'3.  {LIGHT_YELLOW}Собрать номера из {LIGHT_MAGENTA} города{WHITE} \n'
+              f'4.  {LIGHT_YELLOW}Объединить файлы {LIGHT_MAGENTA}  города{WHITE} \n'
               f'    {session} \n'
+              f'    {DARK_GRAY}Быстрый выбор нужного региона и города: {WHITE}1-[{YELLOW}ID региона{WHITE}]-[{LIGHT_YELLOW}ID города{WHITE}]. Например: 1-{YELLOW}25{WHITE}-{LIGHT_YELLOW}268{WHITE} \n'
               f'╰────────────────────────────────╯ \n')
     else:
         print(f'╭───────  ГЛАВНОЕ МЕНЮ  ─────────╮ \n'

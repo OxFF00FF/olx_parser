@@ -86,7 +86,10 @@ def save_offers(content: list[Offer], region_id, region_name, city_id, city_name
         save_json([item.model_dump() for item in content], os.path.join(out_dir, f'{filename}.json'))
 
     if save_xls:
-        save_offers_excel(content, os.path.join(file_path, f'{filename}.xlsx'), show_info=False)
+        with yaspin(text='Сохранение') as spinner:
+            save_offers_excel(content, os.path.join(file_path, f'{filename}.xlsx'), show_info=False)
+            time.sleep(1)
+            spinner.stop()
 
 
 def save_offers_excel(content: list[Offer], filepath: str, show_info: bool = True):
@@ -257,9 +260,8 @@ def merge_city_offers(bar: str, data_dir: str = None, region_name: str = None, r
 
     with yaspin(text="Сохранение") as spinner:
         merged_wb.save(save_path)
-        spinner.text = 'Сохранено'
-        spinner.ok('✔️')
         time.sleep(1)
+        spinner.stop()
     print("🔄  Форматирование строк")
 
     total_rows = output_ws.max_row - 1
@@ -292,9 +294,8 @@ def merge_city_offers(bar: str, data_dir: str = None, region_name: str = None, r
     try:
         with yaspin(text="Сохранение") as spinner:
             merged_wb.save(save_path)
-            spinner.text = 'Сохранено'
-            spinner.ok('✔️')
             time.sleep(1)
+            spinner.stop()
 
         print(f"💾  {LIGHT_GREEN}Файл сохранен в `{clickable_file_link(save_path)}` {WHITE}")
         time.sleep(1)
