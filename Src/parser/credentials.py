@@ -29,7 +29,8 @@ def save_token(token_data: dict, updated=None):
     action = 'обновлен' if updated else 'получен'
     print(f"\n⌛️  {LIGHT_GREEN}Токен {action}{WHITE} · Истекает через {LIGHT_YELLOW}{minutes} мин{WHITE} в {LIGHT_MAGENTA}{formatted_time}{WHITE}")
 
-    creds_file = os.path.join(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data'), 'credentials.json')
+    data_dir = os.path.join(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data'))
+    creds_file = os.path.join(data_dir, 'common', 'credentials.json')
     save_json(token_data, creds_file)
 
 
@@ -193,7 +194,9 @@ def get_token(user='guest', exp_time_only=None, show_info=True) -> str | None:
     :return: Строка токена в формате "Bearer ..." или None, если получение не удалось.
     """
     data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data')
-    creds_file = os.path.join(data_dir, 'credentials.json')
+    os.makedirs(data_dir, exist_ok=True)
+
+    creds_file = os.path.join(data_dir, 'common', 'credentials.json')
     user_dir = os.path.join(os.path.dirname(data_dir), 'chrome', 'profiles', user)
     user_dir_existed = os.path.exists(user_dir)
 
