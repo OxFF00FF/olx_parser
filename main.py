@@ -12,6 +12,8 @@ from Src.parser.credentials import get_token
 from Src.parser.olx import olxParser
 from Src.parser.utils import format_proxies
 
+__version__ = 'v 1.0.0'
+
 if platform.system() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -22,7 +24,7 @@ async def main():
     try:
         parser = olxParser(Xlsx=True)
 
-        banner()
+        banner(__version__)
         format_proxies()
         main_menu()
 
@@ -51,7 +53,7 @@ async def main():
                     continue
 
                 get_token(exp_time_only=True, show_info=False)
-                print(f"{LIGHT_BLUE}[{n_file + 1} / {len(parsed_files)}]{WHITE}  {filename}")
+                print(f"[{LIGHT_BLUE}{n_file + 1} / {len(parsed_files)}{WHITE}]  {filename}")
                 await parser.parse_phones_from_file(filepath, show_info=False)
             print(f"✔️  Все файлы в обработаны")
 
@@ -61,6 +63,12 @@ async def main():
 
         elif choice == '5':
             authorize()
+
+        elif '-' in choice:
+            parts = choice.split('-')
+            region_id = int(parts[1])
+            city_id = int(parts[2])
+            await parser.run(region_id, city_id)
 
         else:
             print(f"❌  Такой опции нет: {LIGHT_RED}{choice}{WHITE} \n")
