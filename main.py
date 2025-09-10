@@ -12,7 +12,7 @@ from Src.parser.credentials import get_token
 from Src.parser.olx import olxParser
 from Src.parser.utils import format_proxies
 
-__version__ = 'v 1.1.0'
+__version__ = 'v 1.2.0'
 
 
 async def main():
