@@ -3,6 +3,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from fnmatch import fnmatch
+from main import __version__
 
 
 def load_gitignore_patterns(gitignore_path=".gitignore"):
@@ -64,6 +65,6 @@ if __name__ == "__main__":
     ignore_patterns = load_gitignore_patterns()
     current_date = datetime.now().strftime("%d_%m_%Y")
     folder_name = f"olx_{current_date}"
-    archive_name = f"olx_parser-master.zip"
+    archive_name = f"olx_parser-master_{__version__}.zip"
 
     zip_directory(output_zip=archive_name, exclude_patterns=ignore_patterns, folder_prefix=folder_name)

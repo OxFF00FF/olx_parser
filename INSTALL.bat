@@ -13,5 +13,6 @@ if not exist ".venv" (
     echo.
 )
 
+playwright install chromium
 echo Required dependencies installed
 pause
