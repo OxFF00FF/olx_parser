@@ -353,12 +353,12 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     if isinstance(response, Exception):
         number_cell.value = 'ошибка'
         number_cell.style = 'error_status'
-        print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}Ошибка при получении номера: {response} · {url}")
+        print(f"{progress.ljust(12)}  ❌{RED}  Номер не получен: {WHITE}Ошибка при получении номера: {response} · {url}")
         return
     if response == {}:
         number_cell.value = 'Captcha'
         number_cell.style = 'error_status'
-        print(f"{progress}  ❌{RED}  Номер не получен: {WHITE}Captcha {''.ljust(9)} ·  {url}")
+        print(f"{progress.ljust(12)}  ❌{RED}  Номер не получен: {WHITE}Captcha {''.ljust(9)} ·  {url}")
         return
 
     # Если ответ получен и есть ошибка, то ставим соответствующий статус в ячейку
@@ -373,10 +373,10 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         elif 'Невозможно продолжить' in error:
             number_cell.value = 'Captcha'
             number_cell.style = 'error_status'
-            print(f"{progress}  ❌{RED}  Номер не получен: {WHITE} Captcha {''.ljust(9)} · {url}")
+            print(f"{progress.ljust(12)}  ❌{RED}  Номер не получен: {WHITE} Captcha {''.ljust(9)} · {url}")
         else:
             error = error.split('.')[0]
-            print(f"{progress}  ❌{RED}  Номер не получен: {WHITE} {error} · {url}")
+            print(f"{progress.ljust(12)}  ❌{RED}  Номер не получен: {WHITE} {error} · {url}")
 
         # Если номер был скрыт, то пытаемся его получить, если все успешно то добавляем его в ячейку
         if number_cell.value == 'скрыт':
@@ -384,9 +384,9 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
             if phone:
                 number_cell.value = phone
                 number_cell.style = 'success_status'
-                print(f"{progress}  ✔{GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
+                print(f"{progress.ljust(12)}  ✔{GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
             else:
-                print(f"{progress}  ❌{RED}  Номер не получен: {WHITE} Ошибка 1 · {url}")
+                print(f"{progress.ljust(12)}  ❌{RED}  Номер не получен: {WHITE} скрытый номер не удалось получить повторной попыткой · {url}")
 
     else:
         # Если ошибок нет, то получаем номер из ответа, создаем строку из номеров и записываем в ячейку
@@ -396,9 +396,9 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
             phone = ' · '.join([str(p) for p in phones])
             number_cell.value = phone
             number_cell.style = 'success_status'
-            print(f"{progress}  ✔{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
+            print(f"{progress.ljust(12)}  ✔{LIGHT_GREEN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
         else:
-            print(f"{progress}  ❌{DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
+            print(f"{progress.ljust(12)}  ❌{DARK_GRAY}  Номер не указан {''.ljust(20)}{WHITE} · {url}")
 
     # Если во время получения номера произошла ошибка или капча, то пытаемся еще раз получить номер
     if number_cell.value == 'True' or number_cell.value == 'Captcha':
@@ -406,9 +406,9 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
         if phone:
             number_cell.value = phone
             number_cell.style = 'success_status'
-            print(f"{progress}  ✔{LIGHT_CYAN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
+            print(f"{progress.ljust(12)}  ✔{LIGHT_CYAN}  Номер получен: {LIGHT_YELLOW}{phone.ljust(20)}{WHITE} · {url}")
         else:
-            print(f"{progress}  ❌{RED}  Номер не получен: {WHITE} Ошибка 2 · {url}")
+            print(f"{progress.ljust(12)}  ❌{RED}  Номер не получен: {WHITE} Повторная попытка после получения капчи/ошибки не удалась · {url}")
 
     # Сохраняем прогресс каждые N итераций
     if (n + 1) % save_every_n == 0:
