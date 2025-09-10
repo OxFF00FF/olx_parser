@@ -1,8 +1,9 @@
+import asyncio
 import os
 import time
 
 import undetected_chromedriver as uc
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 
 from Src.app.colors import *
 from Src.app.logging_config import logger
@@ -102,7 +103,7 @@ def get_session_id(user_dir='guest') -> str | None:
             driver.close()
 
 
-def get_session_id_pw(user_dir: str = "guest") -> str | None:
+async def get_session_id_pw(user_dir: str = "guest") -> str | None:
     """
     Получает ID сессии аккаунта OLX после входа или возвращает уже существующий,
     используя указанный профиль браузера (Playwright sync).
@@ -118,12 +119,13 @@ def get_session_id_pw(user_dir: str = "guest") -> str | None:
     chrome_dir = os.path.join(os.path.dirname(data_dir), "chrome")
     user_data_dir = os.path.join(chrome_dir, "profiles", user_dir)
     user_dir_existed = os.path.exists(user_data_dir)
+    headless = True if os.path.exists(auth_file) and user_dir_existed else False
 
     if not user_dir_existed:
-        print(f"\n‼️  Папка пользователя не найдена · Сейчас откроется браузер, войдите в аккаунт OLX в течение минуты и дождитесь закрытия браузера")
+        print(f"‼️  {LIGHT_YELLOW}Файл {WHITE}`authorize.json`{LIGHT_YELLOW} не найден{WHITE} · Получаем новый Идентификатор сессии")
         if os.path.exists(auth_file):
             os.remove(auth_file)
-        time.sleep(5)
+        await asyncio.sleep(5)
 
     if os.path.exists(auth_file):
         session_id = open_json(auth_file).get("login_sid")
@@ -131,10 +133,10 @@ def get_session_id_pw(user_dir: str = "guest") -> str | None:
             print(f"✔️  Текущий SID · {session_id}")
             return session_id
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch_persistent_context(
+    async with async_playwright() as p:
+        browser = await p.chromium.launch_persistent_context(
             user_data_dir=user_data_dir,
-            headless=user_dir_existed,
+            headless=headless,
             args=["--disable-blink-features=AutomationControlled"],
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
         )
@@ -142,37 +144,38 @@ def get_session_id_pw(user_dir: str = "guest") -> str | None:
         logger.info(f"⚙️  [{DARK_GRAY}Profile: {BOLD}{user_data_dir}{RESET}{WHITE}]")
         logger.info(f"⚙️  [{DARK_GRAY}Chrome:  {BOLD}{p.chromium.executable_path}{RESET}{WHITE}]")
         logger.info(f"⚙️  [{DARK_GRAY}Version: {BOLD}{browser.browser.version}{RESET}{WHITE}]")
-        time.sleep(3)
+        await asyncio.sleep(3)
 
-        page = browser.new_page()
-        page.goto("https://www.olx.ua/uk/myaccount/settings")
+        page = await browser.new_page()
+        await page.goto("https://www.olx.ua/uk/myaccount/settings")
 
         if not user_dir_existed:
-            time.sleep(60)
+            await asyncio.sleep(60)
 
         if not os.path.exists(auth_file):
-            time.sleep(30)
+            await asyncio.sleep(30)
 
-        if "Увійти" in page.title():
+        title = await page.title()
+        if "Увійти" in title:
             print("❌  Не удалось получить токен · Возможно сработала капча или вы не успели войти")
-            browser.close()
+            await browser.close()
             return None
-        elif "satisfied" in page.title().lower():
+        elif "satisfied" in title.lower():
             print("❌  Сработала блокировка CloudFront. Попробуйте позже")
-            browser.close()
+            await browser.close()
             return None
         else:
-            print(f"✔️  {page.title()}")
+            print(f"✔️  {title}")
 
-        cookies = browser.cookies()
+        cookies = await browser.cookies()
         session_id = next((cookie["value"] for cookie in cookies if cookie["name"] == "SID" and "login.olx.ua" in cookie["domain"]), None)
 
         if session_id:
             save_json({"login_sid": session_id}, auth_file)
             print(f"\n✔️  SID получен · {session_id}")
-            browser.close()
+            await browser.close()
             return session_id
         else:
             print("❌  Не удалось получить идентификатор сессии")
-            browser.close()
+            await browser.close()
             return None

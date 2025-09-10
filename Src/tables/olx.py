@@ -414,4 +414,4 @@ async def process_cell(parser, n, item, total, counter, ws, wb, wb_path, save_ev
     if (n + 1) % save_every_n == 0:
         async with lock:
             wb.save(wb_path)
-        get_token(exp_time_only=True)
+        await get_token(exp_time_only=True)

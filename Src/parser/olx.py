@@ -54,6 +54,7 @@ class olxParser:
 
         self.out_dir = os.path.join(self.data_dir)
         os.makedirs(self.out_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.data_dir, 'common'), exist_ok=True)
 
     @staticmethod
     def _get_headers() -> dict:
@@ -157,7 +158,7 @@ class olxParser:
 
             elif status == 401:
                 logger.debug(f"⚠  [{attempt}/{retries}] Token expired. Status: {YELLOW}{status}{WHITE}\n{response}")
-                get_token()
+                await get_token()
 
             elif status == 500:
                 if '407' in response:
@@ -339,7 +340,7 @@ class olxParser:
                 headers = {
                     'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
                     'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-                    'authorization': get_token(),
+                    'authorization': await get_token(),
                     'cache-control': 'no-cache',
                     'pragma': 'no-cache',
                     'priority': 'u=0, i',
@@ -365,7 +366,7 @@ class olxParser:
 
                     if error_detail in ['invalid_token', 'Disallowed for this user']:
                         # Повторный запрос с новым токеном
-                        headers['authorization'] = get_token(show_info=False)
+                        headers['authorization'] = await get_token(show_info=False)
                         data_2 = await self._make_request(url, headers, json_response=True, use_proxy=True)
                         phones = data_2.get('data', {}).get('phones', [])
 

@@ -4,7 +4,7 @@ import time
 
 from Src.app.colors import *
 from Src.app.logging_config import logger
-from Src.parser.authorization import get_session_id
+from Src.parser.authorization import get_session_id_pw
 from Src.parser.credentials import get_auth_code, get_access_token, get_token
 from Src.parser.utils import create_banner
 
@@ -18,8 +18,8 @@ def banner(v):
     ], version=v, show=True)
 
 
-def main_menu():
-    token = get_token(show_info=False)
+async def main_menu():
+    token = await get_token(show_info=False)
     session = f'{LIGHT_GREEN}Сессия активна{WHITE}' if token else f'{RED}Необходима авторизация{WHITE}'
 
     if token:

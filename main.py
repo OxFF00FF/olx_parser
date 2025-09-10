@@ -14,9 +14,6 @@ from Src.parser.utils import format_proxies
 
 __version__ = 'v 1.1.0'
 
-if platform.system() == "Windows":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
 
 async def main():
     start = perf_counter()
@@ -26,7 +23,7 @@ async def main():
 
         banner(__version__)
         format_proxies()
-        main_menu()
+        await main_menu()
 
         choice = input(f'{CYAN}▶️Выберите действие ({WHITE}{BOLD}1/2/3/4{RESET}{CYAN}): {WHITE}')
         if choice == '1':
@@ -40,7 +37,7 @@ async def main():
             await parser.run(region.id, city.id)
 
         elif choice == '2':
-            get_token(exp_time_only=True, show_info=False)
+            await get_token(exp_time_only=True, show_info=False)
             choosed_filename = choose_file()
             await parser.parse_phones_from_file(choosed_filename, show_info=True)
 
@@ -52,7 +49,7 @@ async def main():
                 if os.path.basename(filename).startswith('+'):
                     continue
 
-                get_token(exp_time_only=True, show_info=False)
+                await get_token(exp_time_only=True, show_info=False)
                 print(f"[{LIGHT_BLUE}{n_file + 1} / {len(parsed_files)}{WHITE}]  {filename}")
                 await parser.parse_phones_from_file(filepath, show_info=False)
             print(f"✔️  Все файлы в обработаны")
